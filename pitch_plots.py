@@ -78,5 +78,5 @@ else:
     st.write("### Pitch Movement Chart")    
 
     #Scatter plot of pitch movement
-    st.scatter_chart(x= data[["pfx_x"]],y=data[["pfx_z"]])
+    st.scatter_chart(x= data["pfx_x"],y=data["pfx_z"])
 
