@@ -20,7 +20,7 @@ pitch_type_mapping = {
 
 @st.cache_data
 def get_filtered_data(start_date, end_date, playerid):
-    return statcast_pitcher(start_dt=start_date, end_dt=end_date,player_id=playerid, parallel=True)
+    return statcast_pitcher(start_dt=start_date, end_dt=end_date,player_id=playerid)
 
 st.title("Pitch Plots Horizontal and Vertical Movement")
 
