@@ -26,7 +26,10 @@ st.title("Pitch Plots Horizontal and Vertical Movement")
 
 player_name = st.text_input("Enter Player Name", value="Hunter Greene")
 if player_name:
-    player_info = playerid_lookup(player_name.split(" ")[1], player_name.split(" "[0]))
+    split_name = player_name.split(" ")
+    first_name = split_name[0]
+    last_name = split_name[1] if len(player_name.split(" ")) > 1 else ""
+    player_info = playerid_lookup(last_name, first_name)
     try:
         first_name, last_name = player_name.split(" ")
         player_info = playerid_lookup(last_name, first_name)
@@ -76,3 +79,4 @@ else:
 
     #Scatter plot of pitch movement
     st.scatter_chart(data[["pfx_x","pfx_z"]])
+
