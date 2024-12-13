@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 from pybaseball import statcast_pitcher
 from pybaseball import playerid_lookup
 
