@@ -32,7 +32,7 @@ if start_date > end_date:
 else:
     # Fetch data based on user inputs
     with st.spinner("Fetching data..."):
-        data = get_filtered_data(start_date=start_date.strftime("%Y-%m-%d"), end_date=end_date.strftime("%Y-%m-%d"))
+        data = get_filtered_data(start_date=start_date.strftime("%Y-%m-%d"), end_date=end_date.strftime("%Y-%m-%d"), playerid = playerid_lookup(playerid))
 
     # Display success message
     st.success(f"Data loaded successfully for the range {start_date} to {end_date}.")
@@ -45,7 +45,7 @@ st.title("Pitch Plots Savant Data")
 st.scatter_chart(x= data["pfx_x"], y=data["pfx_z"])
 
 
-
+'''
 pitch_type = st.selectbox(
     "Select Pitch Type",
     options = data['pitch_type'].dropna().unique(),
@@ -62,7 +62,9 @@ filtered = data[
     (data["pitch_type"] == pitch_type) &
     (data['stand'] == batter_stance)
     ]
+'''
 
+'''
 if not filtered.empty:
     
         hits = filtered[filtered['events'] == "single"].shape[0] + \
@@ -84,3 +86,4 @@ if not filtered.empty:
         st.write(f"Batting Average against {pitch_type}: {ba:.3f}")
 else:
       st.write("No data available")
+'''
