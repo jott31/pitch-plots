@@ -19,6 +19,27 @@ pitch_type_mapping = {
     "CS": "Slow Curve",
 }
 
+pitch_colors_mapping = {
+    "FF": "#FF007D",
+    "SI": "#98165D",
+    "FC": "#BE5FA0",
+    "CH": "#F79E70",
+    "FS": "#FE6100",
+    "SC": "#F08223",
+    "FO": "3FFB000",
+    "SL": "#67E18D",
+    "ST": "#1BB999",
+    "SV": "#376748",
+    "KC": "#311D8B",
+    "CU": "#3025CE",
+    "CS": "#274BFC",
+    "EP": "#648FFF",
+    "KN": "#867A08",
+    "PO": "#472C30",
+    "UN": "#9C8975"
+}
+
+
 @st.cache_data
 def get_filtered_data(start_date, end_date, playerid):
     return statcast_pitcher(start_dt=start_date, end_dt=end_date,player_id=playerid)
