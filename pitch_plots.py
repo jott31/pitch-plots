@@ -108,7 +108,7 @@ else:
         color="pitch_name",
         title="Pitch Movement",
         labels={"pfx_x": "Horizontal Break (inches)","pfx_z": "Vertical Break (inches)"},
-        hover_data=["release_speed"],
+        hover_data=["release_speed","des"],
         color_discrete_map = pitch_colors_mapping
     )
 
