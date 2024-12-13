@@ -78,5 +78,18 @@ else:
     st.write("### Pitch Movement Chart")    
 
     #Scatter plot of pitch movement
-    st.scatter_chart(x= data["pfx_x"],y=data["pfx_z"])
+    #Scatter plot of pitch movement
+    scatter_plot = px.scatter(
+        data,
+        x="pfx_x",
+        y="pfx_z",
+        color="pitch_name",
+        title="Pitch Movement",
+        labels={"pfx_x": "Horizontal Break (inches)","pfx_z": "Vertical Break (inches)"},
+        hover_data=["release_speed"]
+    )
+
+
+    st.plotly_chart(scatter_plot, use_container_width=True)
+
 
