@@ -111,7 +111,8 @@ else:
         hover_data=["release_speed","type"],
         color_discrete_map = pitch_colors_mapping
     )
-
+    scatter_plot.update_xaxes(tick0 = -2,dtick=.5)
+    scatter_plot.update_yaxes(tick0 = -2,dtick=.5)
 
     st.plotly_chart(scatter_plot, use_container_width=True)
 
