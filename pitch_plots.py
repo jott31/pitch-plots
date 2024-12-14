@@ -103,8 +103,8 @@ else:
     #Scatter plot of pitch movement
     scatter_plot = px.scatter(
         data,
-        x="pfx_x",
-        y="pfx_z",
+        x="pfx_x" * -12,
+        y="pfx_z" * 12,
         color="pitch_name",
         title="Pitch Movement",
         labels={"pfx_x": "Horizontal Break (inches)","pfx_z": "Vertical Break (inches)"},
