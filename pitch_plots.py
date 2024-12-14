@@ -92,7 +92,7 @@ with st.spinner("Fetching data..."):
         end_date=end_date.strftime("%Y-%m-%d"), 
         playerid = playerid)
     data["pfx_x"]=data["pfx_x"]
-    data["pfx_z"]=data["pfx_z"] - (.5 * 386.09 * (data['release_pos_y']/((data['release_speed'])*1.467)**2))
+    data["ivb"]=data["pfx_z"] - (.5 * 386.09 * (data['release_pos_y']/((data['release_speed'])*1.467)**2))
 
 if data.empty:
     st.warning("No data available for the selected player and date range")
@@ -107,7 +107,7 @@ else:
     scatter_plot = px.scatter(
         data,
         x="pfx_x",
-        y="pfx_z",
+        y="ivb",
         color="pitch_name",
         title="Pitch Movement",
         labels={"pfx_x": "Horizontal Break (inches)","pfx_z": "Vertical Break (inches)"},
