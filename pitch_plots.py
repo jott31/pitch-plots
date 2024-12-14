@@ -99,7 +99,7 @@ else:
     #Debug or display data as needed
     st.write("### Pitch Movement Chart")    
 
-    for i in data:
+    for i in enumerate(data):
         data['pfx_x'] = data['pfx_x'] * -12,
         data['pfx_z'] = data['pfx_z'] * 12,
     #Scatter plot of pitch movement
