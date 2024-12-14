@@ -99,12 +99,14 @@ else:
     #Debug or display data as needed
     st.write("### Pitch Movement Chart")    
 
-    #Scatter plot of pitch movement
+    for i in data:
+        data['pfx_x'] = data['pfx_x'] * -12,
+        data['pfx_z'] = data['pfx_z'] * 12,
     #Scatter plot of pitch movement
     scatter_plot = px.scatter(
         data,
-        x="pfx_x" * -12,
-        y="pfx_z" * 12,
+        x="pfx_x",
+        y="pfx_z",
         color="pitch_name",
         title="Pitch Movement",
         labels={"pfx_x": "Horizontal Break (inches)","pfx_z": "Vertical Break (inches)"},
