@@ -69,6 +69,7 @@ if player_name:
             "Select player ID",
             options= named_id_mapping.keys()
         )
+        
         playerid =  named_id_mapping[selected_player_name]
     else:
         st.error("No players found")
@@ -90,6 +91,8 @@ with st.spinner("Fetching data..."):
         start_date=start_date.strftime("%Y-%m-%d"), 
         end_date=end_date.strftime("%Y-%m-%d"), 
         playerid = playerid)
+    data["pfx_x"]=data["pfx_x"]*-12
+    data["pfx_z"]=data["pfx_z"]*12
 
 if data.empty:
     st.warning("No data available for the selected player and date range")
@@ -99,9 +102,7 @@ else:
     #Debug or display data as needed
     st.write("### Pitch Movement Chart")    
 
-    for i in enumerate(data):
-        data['pfx_x'] = data['pfx_x'] * -12,
-        data['pfx_z'] = data['pfx_z'] * 12,
+    #Scatter plot of pitch movement
     #Scatter plot of pitch movement
     scatter_plot = px.scatter(
         data,
@@ -115,6 +116,7 @@ else:
     )
     scatter_plot.update_xaxes(tick0 = -2,dtick=.5)
     scatter_plot.update_yaxes(tick0 = -2,dtick=.5)
+
 
     st.plotly_chart(scatter_plot, use_container_width=True)
 
