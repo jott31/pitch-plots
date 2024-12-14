@@ -91,8 +91,8 @@ with st.spinner("Fetching data..."):
         start_date=start_date.strftime("%Y-%m-%d"), 
         end_date=end_date.strftime("%Y-%m-%d"), 
         playerid = playerid)
-    data["pfx_x"]=data["pfx_x"]*-12
-    data["pfx_z"]=data["pfx_z"]*12
+    data["pfx_x"]=data["pfx_x"]
+    data["pfx_z"]=data["pfx_z"] - (.5 * 386 * (data['release_pos_y']/(data['release_speed'])*1.467))
 
 if data.empty:
     st.warning("No data available for the selected player and date range")
@@ -114,10 +114,9 @@ else:
         hover_data=["release_speed","type"],
         color_discrete_map = pitch_colors_mapping
     )
-    scatter_plot.update_xaxes(tick0 = -20,dtick=5)
-    scatter_plot.update_yaxes(tick0 = -20,dtick=5)
+    scatter_plot.update_xaxes(tick0 = -2,dtick=.5)
+    scatter_plot.update_yaxes(tick0 = -2,dtick=.5)
 
 
     st.plotly_chart(scatter_plot, use_container_width=True)
-
 
