@@ -133,6 +133,8 @@ else:
 
 
     st.plotly_chart(scatter_plot, use_container_width=True)
+    st.plotly_chart(scatter_plot_2, use_container_width=True)
+
 
 
 
