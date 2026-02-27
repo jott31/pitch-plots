@@ -105,62 +105,40 @@ data["pfx_z"] = data["pfx_z"] * 12
 
 # ----------------------------
 # ----------------------------
-# Season Stats from Statcast Data
 # ----------------------------
-st.write("## Season Summary (Statcast Derived)")
-
-# Get final pitch of each plate appearance
-pa_data = data.sort_values("pitch_number").groupby(
-    ["game_pk", "at_bat_number"]
-).tail(1)
-
-# Batters faced
-batters_faced = len(pa_data)
-
-# Strikeouts
-strikeouts = pa_data[pa_data["events"] == "strikeout"].shape[0]
-
-# Walks (including intentional)
-walks = pa_data[pa_data["events"].isin(["walk", "intent_walk"])].shape[0]
-
-# Home runs
-home_runs = pa_data[pa_data["events"] == "home_run"].shape[0]
-
-# Hits allowed
-hits = pa_data[pa_data["events"].isin([
-    "single", "double", "triple", "home_run"
-])].shape[0]
-
-# Runs allowed
-runs = pa_data["post_bat_score"].diff().clip(lower=0).sum()
-
-# Outs recorded
-outs_recorded = pa_data["outs_when_up"].diff().clip(lower=0).sum()
-innings_pitched = outs_recorded / 3
-
-# ERA
-era = (runs * (9 / innings_pitched)) if innings_pitched > 0 else 0
-
-# FIP (constant ≈ 3.2)
-fip_constant = 3.2
-fip = (
-    ((13 * home_runs) + (3 * walks) - (2 * strikeouts)) / innings_pitched
-    + fip_constant
-) if innings_pitched > 0 else 0
-
-# K% and BB%
-k_percent = (strikeouts / batters_faced * 100) if batters_faced > 0 else 0
-bb_percent = (walks / batters_faced * 100) if batters_faced > 0 else 0
-
-# Display as metrics
-col1, col2, col3, col4, col5 = st.columns(5)
-
-col1.metric("ERA", round(era, 2))
-col2.metric("FIP", round(fip, 2))
-col3.metric("K%", round(k_percent, 1))
-col4.metric("BB%", round(bb_percent, 1))
-col5.metric("IP", round(innings_pitched, 1))
+# Season Stats via pitching_stats()
 # ----------------------------
+st.write("## Season Summary")
+
+season = start_date.year
+fg_stats = get_season_stats(season)
+
+player_row = fg_stats[fg_stats["Name"] == selected_player_name]
+
+if not player_row.empty:
+
+    # Official season stats
+    era = round(player_row["ERA"].values[0], 2)
+    fip = round(player_row["FIP"].values[0], 2)
+    k_percent = round(player_row["K%"].values[0], 1)
+    bb_percent = round(player_row["BB%"].values[0], 1)
+    ip = round(player_row["IP"].values[0], 1)
+
+    # Create summary table
+    summary_df = pd.DataFrame({
+        "Season": [season],
+        "IP": [ip],
+        "ERA": [era],
+        "FIP": [fip],
+        "K%": [k_percent],
+        "BB%": [bb_percent]
+    })
+
+    st.dataframe(summary_df, use_container_width=True)
+
+else:
+    st.warning("Season stats not available for this player.")
+
 # Pitch Usage %
 # ----------------------------
 st.write("## Pitch Usage (%)")
