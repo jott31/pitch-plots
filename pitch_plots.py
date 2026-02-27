@@ -225,4 +225,5 @@ st.plotly_chart(scatter_plot_2, use_container_width=True)
 
 
 
-st.write(fg_stats[fg_stats["IDfg"] == fangraphs_id])
+st.write("FanGraphs ID from lookup:", fangraphs_id)
+st.write("Sample IDs from pitching_stats:", fg_stats["IDfg"].head().tolist())
