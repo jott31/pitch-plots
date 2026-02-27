@@ -121,9 +121,6 @@ st.write("## Season Summary")
 season = start_date.year
 fg_stats = get_season_stats(season)
 
-st.write(fg_stats.head())
-st.write(fg_stats.columns)
-
 # Uncomment temporarily to debug columns
 # st.write(fg_stats.columns)
 
@@ -139,7 +136,7 @@ for col in possible_id_cols:
         break
 
 if fg_id_col:
-    player_row = fg_stats[fg_stats[fg_id_col] == int(fangraphs_id)]
+    player_row = fg_stats[fg_stats["IDfg"] == int(fangraphs_id)]
 
 # Fallback to name matching if ID not found
 if player_row.empty:
@@ -163,8 +160,7 @@ if not player_row.empty:
 else:
     st.warning("Season stats not available for this player.")
     
-    
-st.write(fg_stats["Season"].unique())
+
 # ----------------------------
 # Pitch Movement Plot
 # ----------------------------
