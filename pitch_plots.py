@@ -139,7 +139,7 @@ outs_recorded = pa_data["outs_when_up"].diff().clip(lower=0).sum()
 innings_pitched = outs_recorded / 3
 
 # ERA
-era = (runs * 9 / innings_pitched) if innings_pitched > 0 else 0
+era = (runs * (9 / innings_pitched)) if innings_pitched > 0 else 0
 
 # FIP (constant ≈ 3.2)
 fip_constant = 3.2
