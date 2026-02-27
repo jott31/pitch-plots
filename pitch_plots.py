@@ -86,6 +86,8 @@ end_date = st.date_input("End Date", value=pd.to_datetime("2025-09-30"))
 if start_date > end_date:
     st.error("Start date must be before or equal to end date.")
     st.stop()
+    
+st.write(fg_stats["Season"].unique())
 
 # ----------------------------
 # Fetch Data
