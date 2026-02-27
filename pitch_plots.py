@@ -78,8 +78,8 @@ else:
     st.stop()
 
 
-start_date = st.date_input("Start Date", value=pd.to_datetime("2024-03-20"))
-end_date = st.date_input("End Date", value=pd.to_datetime("2024-09-30"))
+start_date = st.date_input("Start Date", value=pd.to_datetime("2025-03-20"))
+end_date = st.date_input("End Date", value=pd.to_datetime("2025-09-30"))
 
 if start_date > end_date:
     st.error("Start date must be before or equal to the end date.")
