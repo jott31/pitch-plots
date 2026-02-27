@@ -110,56 +110,55 @@ data["pfx_x"] = data["pfx_x"] * 12
 data["pfx_z"] = data["pfx_z"] * 12
 
 # ----------------------------
-# ----------------------------
-# ----------------------------
-# Season Stats via pitching_stats()
-# ----------------------------
-# ----------------------------
 # Season Summary (FanGraphs via IDfg)
+# ----------------------------
+# ----------------------------
+# Season Summary (Robust Matching)
 # ----------------------------
 st.write("## Season Summary")
 
 season = start_date.year
 fg_stats = get_season_stats(season)
 
-player_row = fg_stats[fg_stats["IDfg"] == int(fangraphs_id)]
+# Uncomment temporarily to debug columns
+# st.write(fg_stats.columns)
+
+player_row = pd.DataFrame()
+
+# Possible FG ID column names
+possible_id_cols = ["IDfg", "playerid", "player_id"]
+
+fg_id_col = None
+for col in possible_id_cols:
+    if col in fg_stats.columns:
+        fg_id_col = col
+        break
+
+if fg_id_col:
+    player_row = fg_stats[fg_stats[fg_id_col] == int(fangraphs_id)]
+
+# Fallback to name matching if ID not found
+if player_row.empty:
+    last, first = selected_player_name.split(" ")
+    fg_name = f"{last}, {first}"
+    player_row = fg_stats[fg_stats["Name"] == fg_name]
 
 if not player_row.empty:
 
-    era = round(player_row["ERA"].values[0], 2)
-    fip = round(player_row["FIP"].values[0], 2)
-    k_percent = round(player_row["K%"].values[0], 1)
-    bb_percent = round(player_row["BB%"].values[0], 1)
-    ip = round(player_row["IP"].values[0], 1)
-
     summary_df = pd.DataFrame({
         "Season": [season],
-        "IP": [ip],
-        "ERA": [era],
-        "FIP": [fip],
-        "K%": [k_percent],
-        "BB%": [bb_percent]
+        "IP": [round(player_row["IP"].values[0], 1)],
+        "ERA": [round(player_row["ERA"].values[0], 2)],
+        "FIP": [round(player_row["FIP"].values[0], 2)],
+        "K%": [round(player_row["K%"].values[0], 1)],
+        "BB%": [round(player_row["BB%"].values[0], 1)]
     })
 
     st.dataframe(summary_df, use_container_width=True)
 
 else:
-    st.warning("Season stats not available for this player.")# Pitch Usage %
-# ----------------------------
-st.write("## Pitch Usage (%)")
-
-pitch_usage = (
-    data["pitch_type"]
-    .value_counts(normalize=True)
-    .mul(100)
-    .round(1)
-    .reset_index()
-)
-
-pitch_usage.columns = ["Pitch Type", "Usage (%)"]
-
-st.dataframe(pitch_usage)
-
+    st.warning("Season stats not available for this player.")
+    
 # ----------------------------
 # Pitch Movement Plot
 # ----------------------------
