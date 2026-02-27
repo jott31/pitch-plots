@@ -140,7 +140,7 @@ for col in possible_id_cols:
         break
 
 if fg_id_col:
-player_row = fg_stats[
+    player_row = fg_stats[
     fg_stats["Name"].str.lower() == selected_player_name.lower()
 ]
 
