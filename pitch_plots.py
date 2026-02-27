@@ -87,7 +87,6 @@ if start_date > end_date:
     st.error("Start date must be before or equal to end date.")
     st.stop()
     
-st.write(fg_stats["Season"].unique())
 
 # ----------------------------
 # Fetch Data
@@ -164,6 +163,8 @@ if not player_row.empty:
 else:
     st.warning("Season stats not available for this player.")
     
+    
+st.write(fg_stats["Season"].unique())
 # ----------------------------
 # Pitch Movement Plot
 # ----------------------------
