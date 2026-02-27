@@ -222,3 +222,7 @@ scatter_plot_2.update_xaxes(range=[-2, 2])
 scatter_plot_2.update_yaxes(range=[0, 5])
 
 st.plotly_chart(scatter_plot_2, use_container_width=True)
+
+
+
+st.write(fg_stats[fg_stats["IDfg"] == fangraphs_id])
