@@ -136,7 +136,7 @@ for col in possible_id_cols:
         break
 
 if fg_id_col:
-    player_row = fg_stats[fg_stats["IDfg"] == int(fangraphs_id)]
+    player_row = fg_stats[fg_stats["IDfg"].astype(int) == int(fangraphs_id)]
 
 # Fallback to name matching if ID not found
 if player_row.empty:
