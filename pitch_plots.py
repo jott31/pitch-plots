@@ -118,7 +118,7 @@ else:
     scatter_plot.update_yaxes(tick0 = -20,dtick=5)
 
         #Scatter plot of pitch movement
-    scatter_plot = px.scatter(
+    scatter_plot_2 = px.scatter(
         data,
         x="plate_x",
         y="plate_z",
@@ -128,10 +128,11 @@ else:
         hover_data=["release_speed","type"],
         color_discrete_map = pitch_colors_mapping
     )
-    scatter_plot.update_xaxes(tick0 = -20,dtick=5)
-    scatter_plot.update_yaxes(tick0 = -20,dtick=5)
+    scatter_plot_2.update_xaxes(tick0 = -40,dtick=5)
+    scatter_plot_2.update_yaxes(tick0 = -40,dtick=5)
 
 
     st.plotly_chart(scatter_plot, use_container_width=True)
+
 
 
