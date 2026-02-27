@@ -113,18 +113,34 @@ st.write("## Season Summary")
 season = start_date.year
 fg_stats = get_season_stats(season)
 
-player_row = fg_stats[fg_stats["MLBAMID"] == int(playerid)]
+# Debug (you can temporarily uncomment this)
+# st.write(fg_stats.columns)
+
+player_row = pd.DataFrame()
+
+# Try matching by MLBAM ID if column exists
+if "MLBAMID" in fg_stats.columns:
+    player_row = fg_stats[fg_stats["MLBAMID"] == int(playerid)]
+
+# Try alternative ID column names
+elif "mlbam_id" in fg_stats.columns:
+    player_row = fg_stats[fg_stats["mlbam_id"] == int(playerid)]
+
+# Fallback to name matching (FanGraphs format: "Last, First")
+else:
+    last, first = selected_player_name.split(" ")
+    fg_name_format = f"{last}, {first}"
+    player_row = fg_stats[fg_stats["Name"] == fg_name_format]
+
 
 if not player_row.empty:
 
-    # Official season stats
     era = round(player_row["ERA"].values[0], 2)
     fip = round(player_row["FIP"].values[0], 2)
     k_percent = round(player_row["K%"].values[0], 1)
     bb_percent = round(player_row["BB%"].values[0], 1)
     ip = round(player_row["IP"].values[0], 1)
 
-    # Create summary table
     summary_df = pd.DataFrame({
         "Season": [season],
         "IP": [ip],
