@@ -114,30 +114,15 @@ data["pfx_z"] = data["pfx_z"] * 12
 # ----------------------------
 # Season Stats via pitching_stats()
 # ----------------------------
+# ----------------------------
+# Season Summary (FanGraphs via IDfg)
+# ----------------------------
 st.write("## Season Summary")
 
 season = start_date.year
 fg_stats = get_season_stats(season)
 
-# Debug (you can temporarily uncomment this)
-# st.write(fg_stats.columns)
-
-player_row = pd.DataFrame()
-
-# Try matching by MLBAM ID if column exists
-if "MLBAMID" in fg_stats.columns:
-    player_row = fg_stats[fg_stats["MLBAMID"] == int(playerid)]
-
-# Try alternative ID column names
-elif "mlbam_id" in fg_stats.columns:
-    player_row = fg_stats[fg_stats["mlbam_id"] == int(playerid)]
-
-# Fallback to name matching (FanGraphs format: "Last, First")
-else:
-    last, first = selected_player_name.split(" ")
-    fg_name_format = f"{last}, {first}"
-    player_row = fg_stats[fg_stats["Name"] == fg_name_format]
-
+player_row = fg_stats[fg_stats["IDfg"] == int(fangraphs_id)]
 
 if not player_row.empty:
 
@@ -159,9 +144,7 @@ if not player_row.empty:
     st.dataframe(summary_df, use_container_width=True)
 
 else:
-    st.warning("Season stats not available for this player.")
-
-# Pitch Usage %
+    st.warning("Season stats not available for this player.")# Pitch Usage %
 # ----------------------------
 st.write("## Pitch Usage (%)")
 
