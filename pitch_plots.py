@@ -43,6 +43,7 @@ st.title("Pitch Movement & Season Dashboard")
 # ----------------------------
 # Player Input
 # ----------------------------
+
 player_name = st.text_input("Enter Player Name", value="Hunter Greene")
 
 if player_name:
@@ -53,21 +54,26 @@ if player_name:
         st.error("Enter a valid first and last name")
         st.stop()
 
-    if not player_info.empty:
-        named_id_mapping = {
-            f"{row['name_first']} {row['name_last']}": row["key_mlbam"]
-            for _, row in player_info.iterrows()
-        }
-
-        selected_player_name = st.selectbox(
-            "Select player",
-            options=named_id_mapping.keys()
-        )
-
-        playerid = named_id_mapping[selected_player_name]
-    else:
+    if player_info.empty:
         st.error("No players found")
         st.stop()
+
+    named_id_mapping = {
+        f"{row['name_first']} {row['name_last']}": {
+            "mlbam": row["key_mlbam"],
+            "fangraphs": row["key_fangraphs"]
+        }
+        for _, row in player_info.iterrows()
+    }
+
+    selected_player_name = st.selectbox(
+        "Select player",
+        options=named_id_mapping.keys()
+    )
+
+    playerid = named_id_mapping[selected_player_name]["mlbam"]
+    fangraphs_id = named_id_mapping[selected_player_name]["fangraphs"]
+
 else:
     st.stop()
 
