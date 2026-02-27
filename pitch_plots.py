@@ -120,6 +120,9 @@ st.write("## Season Summary")
 season = start_date.year
 fg_stats = get_season_stats(season)
 
+st.write(fg_stats.head())
+st.write(fg_stats.columns)
+
 # Uncomment temporarily to debug columns
 # st.write(fg_stats.columns)
 
