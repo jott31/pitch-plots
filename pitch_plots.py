@@ -113,7 +113,7 @@ st.write("## Season Summary")
 season = start_date.year
 fg_stats = get_season_stats(season)
 
-player_row = fg_stats[fg_stats["Name"] == selected_player_name]
+player_row = fg_stats[fg_stats["MLBAMID"] == int(playerid)]
 
 if not player_row.empty:
 
