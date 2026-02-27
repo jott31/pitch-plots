@@ -113,42 +113,14 @@ data["pfx_z"] = data["pfx_z"] * 12
 # ----------------------------
 # Season Summary (FanGraphs via IDfg)
 # ----------------------------
-# ----------------------------
-# Season Summary (Robust Matching)
-# ----------------------------
 st.write("## Season Summary")
 
 season = start_date.year
 fg_stats = get_season_stats(season)
 
-st.write("Columns:", fg_stats.columns)
-st.write("Rows:", fg_stats.shape)
-st.write(fg_stats.head())
-
-# Uncomment temporarily to debug columns
-# st.write(fg_stats.columns)
-
-player_row = pd.DataFrame()
-
-# Possible FG ID column names
-possible_id_cols = ["IDfg", "playerid", "player_id"]
-
-fg_id_col = None
-for col in possible_id_cols:
-    if col in fg_stats.columns:
-        fg_id_col = col
-        break
-
-if fg_id_col:
-    player_row = fg_stats[
+player_row = fg_stats[
     fg_stats["Name"].str.lower() == selected_player_name.lower()
 ]
-
-# Fallback to name matching if ID not found
-if player_row.empty:
-    last, first = selected_player_name.split(" ")
-    fg_name = f"{last}, {first}"
-    player_row = fg_stats[fg_stats["Name"] == fg_name]
 
 if not player_row.empty:
 
@@ -164,9 +136,7 @@ if not player_row.empty:
     st.dataframe(summary_df, use_container_width=True)
 
 else:
-    st.warning("Season stats not available for this player.")
-    
-
+    st.warning("No matching season data found.")
 # ----------------------------
 # Pitch Movement Plot
 # ----------------------------
