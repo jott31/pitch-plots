@@ -129,8 +129,8 @@ if not player_row.empty:
         "IP": [round(player_row["IP"].values[0], 1)],
         "ERA": [round(player_row["ERA"].values[0], 2)],
         "FIP": [round(player_row["FIP"].values[0], 2)],
-        "K%": [round(player_row["K%"].values[0], 1)],
-        "BB%": [round(player_row["BB%"].values[0], 1)]
+        "K%": [round(player_row["K%"].values[0] * 100, 1)],
+        "BB%": [round(player_row["BB%"].values[0] * 100, 1)]
     })
 
     st.dataframe(summary_df, use_container_width=True)
