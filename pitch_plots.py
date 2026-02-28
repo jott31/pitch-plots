@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
-from pybaseball importstatcast_pitcher, playerid_lookup, pitching_stats
+from pybaseball import statcast_pitcher, playerid_lookup, pitching_stats
 
 # ----------------------------
 # Pitch Type Mapping
