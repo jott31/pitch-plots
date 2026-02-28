@@ -157,7 +157,7 @@ scatter_plot = px.scatter(
     color_discrete_map=pitch_colors_mapping
 )
 
-scatter_plot.update_xaxes(range=[-25, 25])
+scatter_plot.update_xaxes(range=[25, -25])
 scatter_plot.update_yaxes(range=[-25, 25])
 
 # ----------------------------
@@ -231,7 +231,7 @@ scatter_plot_2.add_shape(
     line=dict(width=2)
 )
 
-scatter_plot_2.update_xaxes(range=[-2, 2])
+scatter_plot_2.update_xaxes(range=[2, -2])
 scatter_plot_2.update_yaxes(range=[0, 5])
 
 st.plotly_chart(scatter_plot_2, use_container_width=True)
