@@ -124,6 +124,56 @@ selected_pitches = st.multiselect(
 
 filtered_data = data[data["pitch_type"].isin(selected_pitches)]
 
+
+# ----------------------------
+# Advanced Pitch Metrics
+# ----------------------------
+
+swing_events = [
+    "swinging_strike",
+    "swinging_strike_blocked",
+    "foul",
+    "foul_tip",
+    "hit_into_play"
+]
+
+whiff_events = [
+    "swinging_strike",
+    "swinging_strike_blocked"
+]
+
+metrics_df = (
+    filtered_data
+    .assign(
+        is_swing = filtered_data["description"].isin(swing_events),
+        is_whiff = filtered_data["description"].isin(whiff_events),
+        in_zone = filtered_data["zone"].between(1, 9)
+    )
+    .groupby("pitch_type")
+    .agg(
+        Pitches=("pitch_type", "count"),
+        Whiffs=("is_whiff", "sum"),
+        Swings=("is_swing", "sum"),
+        InZone=("in_zone", "sum")
+    )
+    .reset_index()
+)
+
+metrics_df["Whiff%"] = (
+    metrics_df["Whiffs"] / metrics_df["Swings"]
+).fillna(0) * 100
+
+metrics_df["InZone%"] = (
+    metrics_df["InZone"] / metrics_df["Pitches"]
+) * 100
+
+metrics_df = metrics_df[[
+    "pitch_type",
+    "Pitches",
+    "Whiff%",
+    "InZone%"
+]]
+
 # ----------------------------
 # Season Summary (FanGraphs via IDfg)
 # ----------------------------
@@ -151,6 +201,21 @@ if not player_row.empty:
 
 else:
     st.warning("No matching season data found.")
+
+# ----------------------------
+# Pitch Type Metrics
+# ----------------------------
+
+st.write("## Pitch Type Metrics")
+
+st.dataframe(
+    metrics_df,
+    column_config={
+        "Whiff%": st.column_config.NumberColumn(format="%.1f%%"),
+        "InZone%": st.column_config.NumberColumn(format="%.1f%%")
+    },
+    use_container_width=True
+)
 # ----------------------------
 # Pitch Movement Plot
 # ----------------------------
