@@ -198,8 +198,6 @@ for _, row in release_df.iterrows():
         )
     )
 
-st.plotly_chart(scatter_plot, width=300)
-
 # ----------------------------
 # Pitch Location Plot
 # ----------------------------
@@ -232,4 +230,15 @@ scatter_plot_2.add_shape(
 scatter_plot_2.update_xaxes(range=[2, -2])
 scatter_plot_2.update_yaxes(range=[0, 6])
 
-st.plotly_chart(scatter_plot_2, width=250)
+st.markdown("---")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.write("### Pitch Movement")
+    st.plotly_chart(scatter_plot, use_container_width=True)
+
+with col2:
+    st.write("### Pitch Location")
+    st.plotly_chart(scatter_plot_2, use_container_width=True)
+
