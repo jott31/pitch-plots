@@ -160,27 +160,6 @@ scatter_plot = px.scatter(
 scatter_plot.update_xaxes(range=[-25, 25])
 scatter_plot.update_yaxes(range=[-25, 25])
 
-st.plotly_chart(scatter_plot, use_container_width=True)
-
-# ----------------------------
-# Pitch Location Plot
-# ----------------------------
-st.write("## Pitch Location")
-
-scatter_plot_2 = px.scatter(
-    data,
-    x="plate_x",
-    y="plate_z",
-    color="pitch_type",
-    title="Pitch Location",
-    labels={
-        "plate_x": "Horizontal Location",
-        "plate_z": "Vertical Location"
-    },
-    hover_data=["release_speed", "pitch_type"],
-    color_discrete_map=pitch_colors_mapping
-)
-
 # ----------------------------
 # Compute Average Arm Slot per Pitch Type
 # ----------------------------
@@ -218,6 +197,31 @@ for _, row in release_df.iterrows():
             showlegend=False
         )
     )
+
+st.plotly_chart(scatter_plot, use_container_width=True)
+
+# ----------------------------
+# Pitch Location Plot
+# ----------------------------
+st.write("## Pitch Location")
+
+scatter_plot_2 = px.scatter(
+    data,
+    x="plate_x",
+    y="plate_z",
+    color="pitch_type",
+    title="Pitch Location",
+    labels={
+        "plate_x": "Horizontal Location",
+        "plate_z": "Vertical Location"
+    },
+    hover_data=["release_speed", "pitch_type"],
+    color_discrete_map=pitch_colors_mapping
+)
+
+
+
+
 
 # Strike Zone Overlay
 scatter_plot_2.add_shape(
