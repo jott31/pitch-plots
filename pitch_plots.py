@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
 from pybaseball import statcast_pitcher, playerid_lookup, pitching_stats
 
 # ----------------------------
@@ -179,6 +180,44 @@ scatter_plot_2 = px.scatter(
     hover_data=["release_speed", "pitch_type"],
     color_discrete_map=pitch_colors_mapping
 )
+
+# ----------------------------
+# Compute Average Arm Slot per Pitch Type
+# ----------------------------
+release_df = (
+    data
+    .groupby("pitch_type")[["release_pos_x", "release_pos_z"]]
+    .mean()
+    .reset_index()
+)
+
+# Scale factor so lines are visible on movement plot
+scale_factor = 5
+
+# ----------------------------
+# Add Arm Slot Lines
+# ----------------------------
+
+for _, row in release_df.iterrows():
+    
+    pitch = row["pitch_type"]
+    x_val = row["release_pos_x"] * scale_factor
+    y_val = row["release_pos_z"] * scale_factor
+    
+    scatter_plot.add_trace(
+        go.Scatter(
+            x=[0, x_val],
+            y=[0, y_val],
+            mode="lines",
+            line=dict(
+                dash="dash",
+                width=3,
+                color=pitch_colors_mapping.get(pitch, "black")
+            ),
+            name=f"{pitch} Arm Slot",
+            showlegend=False
+        )
+    )
 
 # Strike Zone Overlay
 scatter_plot_2.add_shape(
