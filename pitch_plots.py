@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
-from pybaseball import statcast_pitcher, playerid_lookup, pitching_stats
+from pybaseball importstatcast_pitcher, playerid_lookup, pitching_stats
 
 # ----------------------------
 # Pitch Type Mapping
@@ -33,7 +33,7 @@ def get_filtered_data(start_date, end_date, playerid):
 
 @st.cache_data
 def get_season_stats(season):
-    return pitching_stats(season)
+    return pitching_stats(season, qual=0)
 
 # ----------------------------
 # App Title
@@ -192,6 +192,3 @@ scatter_plot_2.update_xaxes(range=[-2, 2])
 scatter_plot_2.update_yaxes(range=[0, 5])
 
 st.plotly_chart(scatter_plot_2, use_container_width=True)
-
-st.write(fg_stats.head(10)[["Name", "Season"]])
-st.write(fg_stats["Season"].unique())
