@@ -112,6 +112,19 @@ data["pfx_x"] = data["pfx_x"] * 12
 data["pfx_z"] = data["pfx_z"] * 12
 
 # ----------------------------
+# Pitch Type Filter
+# ----------------------------
+pitch_types = sorted(data["pitch_type"].dropna().unique())
+
+selected_pitches = st.multiselect(
+    "Filter by Pitch Type",
+    options=pitch_types,
+    default=pitch_types
+)
+
+filtered_data = data[data["pitch_type"].isin(selected_pitches)]
+
+# ----------------------------
 # Season Summary (FanGraphs via IDfg)
 # ----------------------------
 st.write("## Season Summary")
@@ -143,7 +156,7 @@ else:
 # ----------------------------
 
 scatter_plot = px.scatter(
-    data,
+    filtered_data,
     x="pfx_x",
     y="pfx_z",
     color="pitch_type",
@@ -163,7 +176,7 @@ scatter_plot.update_yaxes(range=[-25, 25])
 # Compute Average Arm Slot per Pitch Type
 # ----------------------------
 release_df = (
-    data
+    filtered_data
     .groupby("pitch_type")[["release_pos_x", "release_pos_z"]]
     .mean()
     .reset_index()
@@ -202,7 +215,7 @@ for _, row in release_df.iterrows():
 # ----------------------------
 
 scatter_plot_2 = px.scatter(
-    data,
+    filtered_data,
     x="plate_x",
     y="plate_z",
     color="pitch_type",
