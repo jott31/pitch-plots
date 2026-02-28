@@ -221,8 +221,6 @@ scatter_plot_2 = px.scatter(
 
 
 
-
-
 # Strike Zone Overlay
 scatter_plot_2.add_shape(
     type="rect",
@@ -232,6 +230,6 @@ scatter_plot_2.add_shape(
 )
 
 scatter_plot_2.update_xaxes(range=[2, -2])
-scatter_plot_2.update_yaxes(range=[0, 5])
+scatter_plot_2.update_yaxes(range=[0, 6])
 
-st.plotly_chart(scatter_plot_2, use_container_width=True)
+st.plotly_chart(scatter_plot_2, width="content")
