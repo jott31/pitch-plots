@@ -232,4 +232,4 @@ scatter_plot_2.add_shape(
 scatter_plot_2.update_xaxes(range=[2, -2])
 scatter_plot_2.update_yaxes(range=[0, 6])
 
-st.plotly_chart(scatter_plot_2, width=50)
+st.plotly_chart(scatter_plot_2, width=250)
