@@ -193,8 +193,5 @@ scatter_plot_2.update_yaxes(range=[0, 5])
 
 st.plotly_chart(scatter_plot_2, use_container_width=True)
 
-
-
-st.write("Selected Name:", selected_player_name)
-st.write("FanGraphs IDs in table:", fg_stats["IDfg"].head())
-st.write("Names in table:", fg_stats["Name"].head())
+st.write(fg_stats.head(10)[["Name", "Season"]])
+st.write(fg_stats["Season"].unique())
