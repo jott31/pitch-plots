@@ -141,7 +141,6 @@ else:
 # ----------------------------
 # Pitch Movement Plot
 # ----------------------------
-st.write("## Pitch Movement (Horizontal vs Vertical Break)")
 
 scatter_plot = px.scatter(
     data,
@@ -201,7 +200,6 @@ for _, row in release_df.iterrows():
 # ----------------------------
 # Pitch Location Plot
 # ----------------------------
-st.write("## Pitch Location")
 
 scatter_plot_2 = px.scatter(
     data,
