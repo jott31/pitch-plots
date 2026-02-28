@@ -198,7 +198,7 @@ for _, row in release_df.iterrows():
         )
     )
 
-st.plotly_chart(scatter_plot, width="stretch")
+st.plotly_chart(scatter_plot, width=300)
 
 # ----------------------------
 # Pitch Location Plot
