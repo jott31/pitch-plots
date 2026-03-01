@@ -3,6 +3,7 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 from pybaseball import statcast_pitcher, playerid_lookup, pitching_stats, schedule_and_record
+from pybaseball.playerid_lookup import get_lookup_table
 
 # ----------------------------
 # Pitch Type Mapping
@@ -62,26 +63,30 @@ def get_season_dates(season, team_abbrev):
     return start, end
 
 @st.cache_data
-def load_player_lookup():
-    from pybaseball import playerid_lookup
-    # Calling with no meaningful args loads the full Chadwick register
-    return playerid_lookup("", fuzzy=True)
+def load_lookup_table():
+    """
+    Load the full Chadwick player register once and cache it.
+    This powers all search queries locally without repeated API calls.
+    """
+    return get_lookup_table()
 
-@st.cache_data
-def search_players(query):
+def search_players(query, lookup_table):
+    """
+    Search the local lookup table by partial first name, last name,
+    or full name. Returns matching rows with valid MLBAM ids.
+    """
     query = query.strip().lower()
     parts = query.split(" ", 1)
-
-    df = load_player_lookup()
+    df = lookup_table.copy()
 
     if len(parts) == 2:
-        # Match first and last name together
+        # Two words — match first name + last name together
         mask = (
             df["name_first"].str.lower().str.contains(parts[0], na=False) &
             df["name_last"].str.lower().str.contains(parts[1], na=False)
         )
     else:
-        # Match either first or last name
+        # Single word — match either first or last name
         mask = (
             df["name_first"].str.lower().str.contains(query, na=False) |
             df["name_last"].str.lower().str.contains(query, na=False)
@@ -90,45 +95,57 @@ def search_players(query):
     results = df[mask].copy()
     results = results[results["key_mlbam"].notna() & (results["key_mlbam"] != "")]
     results = results.drop_duplicates(subset=["key_mlbam"])
-
     return results.reset_index(drop=True)
+
 # ----------------------------
 # App Title
 # ----------------------------
 st.title("Pitch Movement & Season Dashboard")
 
 # ----------------------------
+# Load Lookup Table Once
+# ----------------------------
+with st.spinner("Loading player database..."):
+    lookup_table = load_lookup_table()
+
+# ----------------------------
 # Player Search
 # ----------------------------
-search_query = st.text_input("Search Player (first or last name)", value="Greene")
+search_query = st.text_input("Search Player (first name, last name, or both)", value="Hunter Greene")
 
 if not search_query or len(search_query.strip()) < 2:
     st.info("Enter at least 2 characters to search for a player.")
     st.stop()
 
-with st.spinner("Searching players..."):
-    player_results = search_players(search_query)
+player_results = search_players(search_query, lookup_table)
 
 if player_results.empty:
     st.error("No players found. Try a different name.")
     st.stop()
 
-# Build display options
-named_id_mapping = {
-    f"{row['name_first'].title()} {row['name_last'].title()}": {
+# Build display options — include play years to disambiguate common names
+named_id_mapping = {}
+for _, row in player_results.iterrows():
+    first = str(row["name_first"]).title()
+    last = str(row["name_last"]).title()
+    first_year = int(row["mlb_played_first"]) if pd.notna(row.get("mlb_played_first")) else None
+    last_year = int(row["mlb_played_last"]) if pd.notna(row.get("mlb_played_last")) else None
+    year_str = f" ({first_year}–{last_year})" if first_year else ""
+    label = f"{first} {last}{year_str}"
+    named_id_mapping[label] = {
         "mlbam": row["key_mlbam"],
-        "fangraphs": row["key_fangraphs"]
+        "fangraphs": row["key_fangraphs"],
+        "display_name": f"{first} {last}"
     }
-    for _, row in player_results.iterrows()
-}
 
-selected_player_name = st.selectbox(
+selected_label = st.selectbox(
     "Select Player",
     options=list(named_id_mapping.keys())
 )
 
-playerid = named_id_mapping[selected_player_name]["mlbam"]
-fangraphs_id = named_id_mapping[selected_player_name]["fangraphs"]
+playerid = named_id_mapping[selected_label]["mlbam"]
+fangraphs_id = named_id_mapping[selected_label]["fangraphs"]
+selected_player_name = named_id_mapping[selected_label]["display_name"]
 
 # ----------------------------
 # Season / Year Selection
@@ -386,4 +403,3 @@ with col1:
 with col2:
     st.write("### Pitch Location")
     st.plotly_chart(scatter_plot_2, use_container_width=True)
-
