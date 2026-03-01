@@ -123,12 +123,42 @@ else:
 
 if not player_row.empty:
     team_abbrev = player_row["Team"].values[0]
+    
+    st.write(f"DEBUG — FanGraphs team abbrev: `{team_abbrev}`")  # temporary, remove later
+
     fg_to_pybaseball = {
         "ARI": "AZ",
-        "CWS": "WSX",
-        "KCR": "KAN",
+        "ATL": "ATL",
+        "BAL": "BAL",
+        "BOS": "BOS",
+        "CHC": "CHC",
+        "CWS": "CWS",
+        "CIN": "CIN",
+        "CLE": "CLE",
+        "COL": "COL",
+        "DET": "DET",
+        "HOU": "HOU",
+        "KCR": "KC",
+        "LAA": "LAA",
+        "LAD": "LAD",
+        "MIA": "MIA",
+        "MIL": "MIL",
+        "MIN": "MIN",
+        "NYM": "NYM",
+        "NYY": "NYY",
+        "OAK": "OAK",
+        "PHI": "PHI",
+        "PIT": "PIT",
+        "SDP": "SD",
+        "SEA": "SEA",
+        "SFG": "SF",
+        "STL": "STL",
+        "TBR": "TB",
+        "TEX": "TEX",
+        "TOR": "TOR",
         "WSN": "WSH",
     }
+
     team_abbrev = fg_to_pybaseball.get(team_abbrev, team_abbrev)
 else:
     team_abbrev = "STL"
