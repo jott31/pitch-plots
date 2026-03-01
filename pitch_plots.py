@@ -67,28 +67,27 @@ def search_players(query):
     results = pd.DataFrame()
     parts = query.split(" ", 1)
 
-    # Try as last name only
-    try:
-        by_last = playerid_lookup(parts[0])
-        if not by_last.empty:
-            results = pd.concat([results, by_last])
-    except Exception:
-        pass
-
-    # Try as first name only
-    try:
-        by_first = playerid_lookup("", parts[0])
-        if not by_first.empty:
-            results = pd.concat([results, by_first])
-    except Exception:
-        pass
-
-    # If two words entered, also try as first + last name together
     if len(parts) == 2:
+        # Full name entered — only do exact first + last lookup
         try:
             by_full = playerid_lookup(parts[1], parts[0])
             if not by_full.empty:
                 results = pd.concat([results, by_full])
+        except Exception:
+            pass
+    else:
+        # Single word — try as last name first, then as first name
+        try:
+            by_last = playerid_lookup(parts[0])
+            if not by_last.empty:
+                results = pd.concat([results, by_last])
+        except Exception:
+            pass
+
+        try:
+            by_first = playerid_lookup("", parts[0])
+            if not by_first.empty:
+                results = pd.concat([results, by_first])
         except Exception:
             pass
 
