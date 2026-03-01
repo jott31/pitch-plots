@@ -309,6 +309,15 @@ st.dataframe(
     use_container_width=True
 )
 
+release_df = (
+    filtered_data
+    .groupby("pitch_type")[["release_pos_x", "release_pos_z"]]
+    .mean()
+    .reset_index()
+)
+
+scale_factor = 5
+
 # ----------------------------
 # Pitch Movement Plot
 # ----------------------------
