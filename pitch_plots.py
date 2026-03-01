@@ -329,6 +329,8 @@ scatter_plot = px.scatter(
 scatter_plot.update_xaxes(range=[25, -25])
 scatter_plot.update_yaxes(range=[-25, 25])
 
+scatter_plot.add_hline(y=0, line_color="white", line_width=1)
+scatter_plot.add_vline(x=0, line_color="white", line_width=1)
 # ----------------------------
 # Compute Average Arm Slot per Pitch Type
 # ----------------------------
