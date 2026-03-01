@@ -37,18 +37,11 @@ def get_season_stats(season):
     return pitching_stats(season, qual=0)
 
 @st.cache_data
-def get_season_dates(season):
-    """
-    Dynamically fetch the exact regular season start and end dates
-    using the Cardinals' schedule as a proxy for the league calendar.
-    """
-    schedule = schedule_and_record(season, "STL")
+def get_season_dates(season, team_abbrev):
+    schedule = schedule_and_record(season, team_abbrev)
 
-    # Strip doubleheader suffixes like "(1)" or "(2)" from date strings
     schedule = schedule.copy()
     schedule["Date"] = schedule["Date"].str.replace(r"\s*\(\d+\)$", "", regex=True)
-
-    # Parse dates — format is like "Thursday, Mar 27"
     schedule["Date"] = pd.to_datetime(
         schedule["Date"].str.extract(r"(\w+,\s+\w+\s+\d+)")[0] + f" {season}",
         format="%A, %b %d %Y",
@@ -56,12 +49,10 @@ def get_season_dates(season):
     )
 
     schedule = schedule.dropna(subset=["Date"])
-
     start = schedule["Date"].min().strftime("%Y-%m-%d")
     end = schedule["Date"].max().strftime("%Y-%m-%d")
 
     return start, end
-
 # ----------------------------
 # App Title
 # ----------------------------
@@ -117,12 +108,28 @@ available_years = list(range(2015, current_year + 1))
 
 season = st.selectbox("Select Season", options=available_years[::-1], index=0)
 
+fg_stats = get_season_stats(season)
+player_row = fg_stats[fg_stats["Name"].str.lower() == selected_player_name.lower()]
+
+if not player_row.empty:
+    team_abbrev = player_row["Team"].values[0]
+    fg_to_pybaseball = {
+        "ARI": "AZ",
+        "CWS": "WSX",
+        "KCR": "KAN",
+        "WSN": "WSH",
+    }
+    team_abbrev = fg_to_pybaseball.get(team_abbrev, team_abbrev)
+else:
+    team_abbrev = "STL"
+    st.warning("Could not determine team — using default schedule.")
+
 # Dynamically fetch exact regular season start and end dates
 with st.spinner("Fetching season schedule..."):
     try:
-        start_date, end_date = get_season_dates(season)
+        start_date, end_date = get_season_dates(season, team_abbrev)
     except Exception as e:
-        st.warning(f"Could not fetch schedule dynamically ({e}). Falling back to default dates.")
+        st.warning(f"Could not fetch schedule ({e}). Falling back to default dates.")
         start_date = f"{season}-03-20"
         end_date = f"{season}-09-30"
 
@@ -215,8 +222,6 @@ metrics_df = metrics_df[[
 # Season Summary (FanGraphs)
 # ----------------------------
 st.write("## Season Summary")
-
-fg_stats = get_season_stats(season)
 
 player_row = fg_stats[
     fg_stats["Name"].str.lower() == selected_player_name.lower()
