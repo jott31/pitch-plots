@@ -372,8 +372,8 @@ scatter_plot.update_layout(title="Pitch Movement")
 scatter_plot.update_xaxes(title="Horizontal Break (inches)", range=[25, -25])
 scatter_plot.update_yaxes(title="Vertical Break (inches)", range=[-25, 25])
 
-scatter_plot.add_hline(y=0, line_color="gray", line_width=1)
-scatter_plot.add_vline(x=0, line_color="gray", line_width=1)
+scatter_plot.add_hline(y=0, line_color="white", line_width=1)
+scatter_plot.add_vline(x=0, line_color="white", line_width=1)
 # ----------------------------
 # Pitch Location Plot
 # ----------------------------
