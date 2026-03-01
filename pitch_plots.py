@@ -312,40 +312,10 @@ st.dataframe(
 # ----------------------------
 # Pitch Movement Plot
 # ----------------------------
-scatter_plot = px.scatter(
-    filtered_data,
-    x="pfx_x",
-    y="pfx_z",
-    color="pitch_type",
-    title="Pitch Movement",
-    labels={
-        "pfx_x": "Horizontal Break (inches)",
-        "pfx_z": "Vertical Break (inches)"
-    },
-    hover_data=["release_speed", "pitch_type"],
-    color_discrete_map=pitch_colors_mapping
-)
+# Start with a blank figure and add arm slot lines first
+scatter_plot = go.Figure()
 
-scatter_plot.update_xaxes(range=[25, -25])
-scatter_plot.update_yaxes(range=[-25, 25])
-
-scatter_plot.add_hline(y=0, line_color="white", line_width=1)
-scatter_plot.add_vline(x=0, line_color="white", line_width=1)
-# ----------------------------
-# Compute Average Arm Slot per Pitch Type
-# ----------------------------
-release_df = (
-    filtered_data
-    .groupby("pitch_type")[["release_pos_x", "release_pos_z"]]
-    .mean()
-    .reset_index()
-)
-
-scale_factor = 5
-
-# ----------------------------
-# Add Arm Slot Lines
-# ----------------------------
+# Add arm slot lines first (will appear beneath points)
 for _, row in release_df.iterrows():
     pitch = row["pitch_type"]
     x_val = row["release_pos_x"] * scale_factor
@@ -366,6 +336,28 @@ for _, row in release_df.iterrows():
         )
     )
 
+# Add scatter points on top
+for pitch in filtered_data["pitch_type"].dropna().unique():
+    pitch_df = filtered_data[filtered_data["pitch_type"] == pitch]
+    scatter_plot.add_trace(
+        go.Scatter(
+            x=pitch_df["pfx_x"],
+            y=pitch_df["pfx_z"],
+            mode="markers",
+            name=pitch,
+            marker=dict(color=pitch_colors_mapping.get(pitch, "gray")),
+            customdata=pitch_df[["release_speed", "pitch_type"]],
+            hovertemplate="release_speed=%{customdata[0]}<br>pitch_type=%{customdata[1]}<extra></extra>"
+        )
+    )
+
+scatter_plot.update_layout(title="Pitch Movement")
+scatter_plot.update_xaxes(title="Horizontal Break (inches)", range=[25, -25])
+scatter_plot.update_yaxes(title="Vertical Break (inches)", range=[-25, 25])
+
+# Quadrant lines
+scatter_plot.add_hline(y=0, line_color="white", line_width=1)
+scatter_plot.add_vline(x=0, line_color="white", line_width=1)
 # ----------------------------
 # Pitch Location Plot
 # ----------------------------
