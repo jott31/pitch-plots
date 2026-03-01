@@ -34,7 +34,13 @@ def get_filtered_data(start_date, end_date, playerid):
 
 @st.cache_data
 def get_season_stats(season):
-    return pitching_stats(season, qual=0)
+    try:
+        stats = pitching_stats(season, qual=0)
+        if stats is None or stats.empty:
+            return pd.DataFrame()
+        return stats
+    except Exception:
+        return pd.DataFrame()
 
 @st.cache_data
 def get_season_dates(season, team_abbrev):
@@ -109,7 +115,11 @@ available_years = list(range(2015, current_year + 1))
 season = st.selectbox("Select Season", options=available_years[::-1], index=0)
 
 fg_stats = get_season_stats(season)
-player_row = fg_stats[fg_stats["Name"].str.lower() == selected_player_name.lower()]
+
+if not fg_stats.empty:
+    player_row = fg_stats[fg_stats["Name"].str.lower() == selected_player_name.lower()]
+else:
+    player_row = pd.DataFrame()
 
 if not player_row.empty:
     team_abbrev = player_row["Team"].values[0]
@@ -122,7 +132,7 @@ if not player_row.empty:
     team_abbrev = fg_to_pybaseball.get(team_abbrev, team_abbrev)
 else:
     team_abbrev = "STL"
-    st.warning("Could not determine team — using default schedule.")
+    st.warning("Could not load FanGraphs data — using default team schedule and season summary will be unavailable.")
 
 # Dynamically fetch exact regular season start and end dates
 with st.spinner("Fetching season schedule..."):
@@ -223,9 +233,11 @@ metrics_df = metrics_df[[
 # ----------------------------
 st.write("## Season Summary")
 
-player_row = fg_stats[
-    fg_stats["Name"].str.lower() == selected_player_name.lower()
-]
+if not fg_stats.empty and not player_row.empty:
+    summary_df = pd.DataFrame({...})
+    st.dataframe(summary_df, use_container_width=True)
+else:
+    st.warning("Season summary unavailable — FanGraphs data could not be loaded for this season.")
 
 if not player_row.empty:
     summary_df = pd.DataFrame({
