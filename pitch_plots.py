@@ -26,7 +26,7 @@ pitch_colors_mapping = {
 }
 
 # ----------------------------
-# Cache Statcast Data
+# Cached Data Functions
 # ----------------------------
 @st.cache_data
 def get_filtered_data(start_date, end_date, playerid):
@@ -44,8 +44,11 @@ def get_season_stats(season):
 
 @st.cache_data
 def get_season_dates(season, team_abbrev):
+    """
+    Fetch exact regular season start and end dates from the
+    player's team schedule via Baseball Reference.
+    """
     schedule = schedule_and_record(season, team_abbrev)
-
     schedule = schedule.copy()
     schedule["Date"] = schedule["Date"].str.replace(r"\s*\(\d+\)$", "", regex=True)
     schedule["Date"] = pd.to_datetime(
@@ -53,58 +56,82 @@ def get_season_dates(season, team_abbrev):
         format="%A, %b %d %Y",
         errors="coerce"
     )
-
     schedule = schedule.dropna(subset=["Date"])
     start = schedule["Date"].min().strftime("%Y-%m-%d")
     end = schedule["Date"].max().strftime("%Y-%m-%d")
-
     return start, end
+
+@st.cache_data
+def search_players(query):
+    """
+    Search players by partial first or last name.
+    Tries as last name first, then as first name, merges and deduplicates results.
+    """
+    query = query.strip()
+    results = pd.DataFrame()
+
+    # Try as last name
+    try:
+        by_last = playerid_lookup(query)
+        if not by_last.empty:
+            results = pd.concat([results, by_last])
+    except Exception:
+        pass
+
+    # Try as first name (pass empty string as last name)
+    try:
+        by_first = playerid_lookup("", query)
+        if not by_first.empty:
+            results = pd.concat([results, by_first])
+    except Exception:
+        pass
+
+    if results.empty:
+        return pd.DataFrame()
+
+    # Deduplicate on mlbam id and filter out invalid entries
+    results = results.drop_duplicates(subset=["key_mlbam"])
+    results = results[results["key_mlbam"].notna() & (results["key_mlbam"] != "")]
+
+    return results.reset_index(drop=True)
+
 # ----------------------------
 # App Title
 # ----------------------------
 st.title("Pitch Movement & Season Dashboard")
 
 # ----------------------------
-# Player Input
+# Player Search
 # ----------------------------
-player_name = st.text_input("Enter Player Name", value="Hunter Greene")
+search_query = st.text_input("Search Player (first or last name)", value="Greene")
 
-if player_name:
-    parts = player_name.strip().split(" ", 1)
-    if len(parts) != 2:
-        st.error("Enter a valid first and last name.")
-        st.stop()
-
-    first_name, last_name = parts
-
-    try:
-        player_info = playerid_lookup(last_name, first_name)
-    except Exception as e:
-        st.error(f"Error looking up player: {e}")
-        st.stop()
-
-    if player_info.empty:
-        st.error("No players found.")
-        st.stop()
-
-    named_id_mapping = {
-        f"{row['name_first']} {row['name_last']}": {
-            "mlbam": row["key_mlbam"],
-            "fangraphs": row["key_fangraphs"]
-        }
-        for _, row in player_info.iterrows()
-    }
-
-    selected_player_name = st.selectbox(
-        "Select player",
-        options=named_id_mapping.keys()
-    )
-
-    playerid = named_id_mapping[selected_player_name]["mlbam"]
-    fangraphs_id = named_id_mapping[selected_player_name]["fangraphs"]
-
-else:
+if not search_query or len(search_query.strip()) < 2:
+    st.info("Enter at least 2 characters to search for a player.")
     st.stop()
+
+with st.spinner("Searching players..."):
+    player_results = search_players(search_query)
+
+if player_results.empty:
+    st.error("No players found. Try a different name.")
+    st.stop()
+
+# Build display options
+named_id_mapping = {
+    f"{row['name_first'].title()} {row['name_last'].title()}": {
+        "mlbam": row["key_mlbam"],
+        "fangraphs": row["key_fangraphs"]
+    }
+    for _, row in player_results.iterrows()
+}
+
+selected_player_name = st.selectbox(
+    "Select Player",
+    options=list(named_id_mapping.keys())
+)
+
+playerid = named_id_mapping[selected_player_name]["mlbam"]
+fangraphs_id = named_id_mapping[selected_player_name]["fangraphs"]
 
 # ----------------------------
 # Season / Year Selection
@@ -114,6 +141,9 @@ available_years = list(range(2015, current_year + 1))
 
 season = st.selectbox("Select Season", options=available_years[::-1], index=0)
 
+# ----------------------------
+# Fetch Season Stats
+# ----------------------------
 fg_stats = get_season_stats(season)
 
 if not fg_stats.empty:
@@ -121,74 +151,37 @@ if not fg_stats.empty:
 else:
     player_row = pd.DataFrame()
 
-if not player_row.empty:
-    team_abbrev = player_row["Team"].values[0]
-    
-    st.write(f"DEBUG — FanGraphs team abbrev: `{team_abbrev}`")  # temporary, remove later
-
-    fg_to_pybaseball = {
-        "ARI": "AZ",
-        "ATL": "ATL",
-        "BAL": "BAL",
-        "BOS": "BOS",
-        "CHC": "CHC",
-        "CWS": "CWS",
-        "CIN": "CIN",
-        "CLE": "CLE",
-        "COL": "COL",
-        "DET": "DET",
-        "HOU": "HOU",
-        "KCR": "KC",
-        "LAA": "LAA",
-        "LAD": "LAD",
-        "MIA": "MIA",
-        "MIL": "MIL",
-        "MIN": "MIN",
-        "NYM": "NYM",
-        "NYY": "NYY",
-        "OAK": "OAK",
-        "PHI": "PHI",
-        "PIT": "PIT",
-        "SDP": "SD",
-        "SEA": "SEA",
-        "SFG": "SF",
-        "STL": "STL",
-        "TBR": "TB",
-        "TEX": "TEX",
-        "TOR": "TOR",
-        "WSN": "WSH",
-    }
-
-    team_abbrev = fg_to_pybaseball.get(team_abbrev, team_abbrev)
-else:
-    team_abbrev = "STL"
-    st.warning("Could not load FanGraphs data — using default team schedule and season summary will be unavailable.")
-
-# Extract team from Statcast data instead of FanGraphs
-# Pull a small sample first just to get the team
-with st.spinner("Fetching season schedule..."):
+# ----------------------------
+# Identify Team from Statcast Sample
+# ----------------------------
+with st.spinner("Identifying team schedule..."):
     try:
-        sample_data = get_filtered_data(
+        sample = get_filtered_data(
             start_date=f"{season}-03-20",
             end_date=f"{season}-09-30",
             playerid=playerid
         )
-        if not sample_data.empty:
-            # Player's team is whichever team they appear for most
-            team_abbrev = sample_data["home_team"].mode()[0]
-        else:
-            team_abbrev = "STL"
+        team_abbrev = sample["home_team"].mode()[0] if not sample.empty else None
     except Exception:
-        team_abbrev = "STL"
+        team_abbrev = None
 
+# ----------------------------
+# Fetch Exact Season Dates
+# ----------------------------
+if team_abbrev:
     try:
         start_date, end_date = get_season_dates(season, team_abbrev)
-    except Exception as e:
-        st.warning(f"Could not fetch schedule ({e}). Falling back to default dates.")
+    except Exception:
         start_date = f"{season}-03-20"
         end_date = f"{season}-09-30"
+else:
+    start_date = f"{season}-03-20"
+    end_date = f"{season}-09-30"
+
+st.caption(f"Regular season window: {start_date} → {end_date}")
+
 # ----------------------------
-# Fetch Statcast Data
+# Fetch Full Statcast Data
 # ----------------------------
 with st.spinner("Fetching Statcast data..."):
     data = get_filtered_data(
@@ -276,12 +269,6 @@ metrics_df = metrics_df[[
 st.write("## Season Summary")
 
 if not fg_stats.empty and not player_row.empty:
-    summary_df = pd.DataFrame({...})
-    st.dataframe(summary_df, use_container_width=True)
-else:
-    st.warning("Season summary unavailable — FanGraphs data could not be loaded for this season.")
-
-if not player_row.empty:
     summary_df = pd.DataFrame({
         "Season": [season],
         "IP": [round(player_row["IP"].values[0], 1)],
@@ -290,11 +277,9 @@ if not player_row.empty:
         "K%": [round(player_row["K%"].values[0] * 100, 1)],
         "BB%": [round(player_row["BB%"].values[0] * 100, 1)]
     })
-
     st.dataframe(summary_df, use_container_width=True)
-
 else:
-    st.warning("No matching season data found.")
+    st.warning("No season summary available for this player and season.")
 
 # ----------------------------
 # Pitch Type Metrics
