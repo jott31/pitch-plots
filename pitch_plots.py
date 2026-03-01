@@ -63,38 +63,42 @@ def get_season_dates(season, team_abbrev):
 
 @st.cache_data
 def search_players(query):
-    """
-    Search players by partial first or last name.
-    Tries as last name first, then as first name, merges and deduplicates results.
-    """
     query = query.strip()
     results = pd.DataFrame()
+    parts = query.split(" ", 1)
 
-    # Try as last name
+    # Try as last name only
     try:
-        by_last = playerid_lookup(query)
+        by_last = playerid_lookup(parts[0])
         if not by_last.empty:
             results = pd.concat([results, by_last])
     except Exception:
         pass
 
-    # Try as first name (pass empty string as last name)
+    # Try as first name only
     try:
-        by_first = playerid_lookup("", query)
+        by_first = playerid_lookup("", parts[0])
         if not by_first.empty:
             results = pd.concat([results, by_first])
     except Exception:
         pass
 
+    # If two words entered, also try as first + last name together
+    if len(parts) == 2:
+        try:
+            by_full = playerid_lookup(parts[1], parts[0])
+            if not by_full.empty:
+                results = pd.concat([results, by_full])
+        except Exception:
+            pass
+
     if results.empty:
         return pd.DataFrame()
 
-    # Deduplicate on mlbam id and filter out invalid entries
     results = results.drop_duplicates(subset=["key_mlbam"])
     results = results[results["key_mlbam"].notna() & (results["key_mlbam"] != "")]
 
     return results.reset_index(drop=True)
-
 # ----------------------------
 # App Title
 # ----------------------------
