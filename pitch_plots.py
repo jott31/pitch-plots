@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-from pybaseball import statcast_pitcher, playerid_lookup, pitching_stats
+from pybaseball import statcast_pitcher, playerid_lookup, pitching_stats, schedule_and_record
 
 # ----------------------------
 # Pitch Type Mapping
@@ -36,6 +36,32 @@ def get_filtered_data(start_date, end_date, playerid):
 def get_season_stats(season):
     return pitching_stats(season, qual=0)
 
+@st.cache_data
+def get_season_dates(season):
+    """
+    Dynamically fetch the exact regular season start and end dates
+    using the Cardinals' schedule as a proxy for the league calendar.
+    """
+    schedule = schedule_and_record(season, "STL")
+
+    # Strip doubleheader suffixes like "(1)" or "(2)" from date strings
+    schedule = schedule.copy()
+    schedule["Date"] = schedule["Date"].str.replace(r"\s*\(\d+\)$", "", regex=True)
+
+    # Parse dates — format is like "Thursday, Mar 27"
+    schedule["Date"] = pd.to_datetime(
+        schedule["Date"].str.extract(r"(\w+,\s+\w+\s+\d+)")[0] + f" {season}",
+        format="%A, %b %d %Y",
+        errors="coerce"
+    )
+
+    schedule = schedule.dropna(subset=["Date"])
+
+    start = schedule["Date"].min().strftime("%Y-%m-%d")
+    end = schedule["Date"].max().strftime("%Y-%m-%d")
+
+    return start, end
+
 # ----------------------------
 # App Title
 # ----------------------------
@@ -44,19 +70,24 @@ st.title("Pitch Movement & Season Dashboard")
 # ----------------------------
 # Player Input
 # ----------------------------
-
 player_name = st.text_input("Enter Player Name", value="Hunter Greene")
 
 if player_name:
+    parts = player_name.strip().split(" ", 1)
+    if len(parts) != 2:
+        st.error("Enter a valid first and last name.")
+        st.stop()
+
+    first_name, last_name = parts
+
     try:
-        first_name, last_name = player_name.split(" ")
         player_info = playerid_lookup(last_name, first_name)
-    except ValueError:
-        st.error("Enter a valid first and last name")
+    except Exception as e:
+        st.error(f"Error looking up player: {e}")
         st.stop()
 
     if player_info.empty:
-        st.error("No players found")
+        st.error("No players found.")
         st.stop()
 
     named_id_mapping = {
@@ -79,31 +110,39 @@ else:
     st.stop()
 
 # ----------------------------
-# Date Selection
+# Season / Year Selection
 # ----------------------------
-start_date = st.date_input("Start Date", value=pd.to_datetime("2025-03-27"))
-end_date = st.date_input("End Date", value=pd.to_datetime("2025-09-28"))
+current_year = pd.Timestamp.now().year
+available_years = list(range(2015, current_year + 1))
 
-if start_date > end_date:
-    st.error("Start date must be before or equal to end date.")
-    st.stop()
-    
+season = st.selectbox("Select Season", options=available_years[::-1], index=0)
+
+# Dynamically fetch exact regular season start and end dates
+with st.spinner("Fetching season schedule..."):
+    try:
+        start_date, end_date = get_season_dates(season)
+    except Exception as e:
+        st.warning(f"Could not fetch schedule dynamically ({e}). Falling back to default dates.")
+        start_date = f"{season}-03-20"
+        end_date = f"{season}-09-30"
+
+st.caption(f"Regular season window: {start_date} → {end_date}")
 
 # ----------------------------
-# Fetch Data
+# Fetch Statcast Data
 # ----------------------------
 with st.spinner("Fetching Statcast data..."):
     data = get_filtered_data(
-        start_date=start_date.strftime("%Y-%m-%d"),
-        end_date=end_date.strftime("%Y-%m-%d"),
+        start_date=start_date,
+        end_date=end_date,
         playerid=playerid
     )
 
 if data.empty:
-    st.warning("No data available for selected player/date range.")
+    st.warning("No data available for the selected player and season.")
     st.stop()
 
-st.success(f"Data loaded from {start_date} to {end_date}")
+st.success(f"Data loaded for {season} regular season.")
 
 # ----------------------------
 # Convert Movement to Inches
@@ -124,11 +163,9 @@ selected_pitches = st.multiselect(
 
 filtered_data = data[data["pitch_type"].isin(selected_pitches)]
 
-
 # ----------------------------
 # Advanced Pitch Metrics
 # ----------------------------
-
 swing_events = [
     "swinging_strike",
     "swinging_strike_blocked",
@@ -145,9 +182,9 @@ whiff_events = [
 metrics_df = (
     filtered_data
     .assign(
-        is_swing = filtered_data["description"].isin(swing_events),
-        is_whiff = filtered_data["description"].isin(whiff_events),
-        in_zone = filtered_data["zone"].between(1, 9)
+        is_swing=filtered_data["description"].isin(swing_events),
+        is_whiff=filtered_data["description"].isin(whiff_events),
+        in_zone=filtered_data["zone"].between(1, 9)
     )
     .groupby("pitch_type")
     .agg(
@@ -175,11 +212,10 @@ metrics_df = metrics_df[[
 ]]
 
 # ----------------------------
-# Season Summary (FanGraphs via IDfg)
+# Season Summary (FanGraphs)
 # ----------------------------
 st.write("## Season Summary")
 
-season = start_date.year
 fg_stats = get_season_stats(season)
 
 player_row = fg_stats[
@@ -187,7 +223,6 @@ player_row = fg_stats[
 ]
 
 if not player_row.empty:
-
     summary_df = pd.DataFrame({
         "Season": [season],
         "IP": [round(player_row["IP"].values[0], 1)],
@@ -205,7 +240,6 @@ else:
 # ----------------------------
 # Pitch Type Metrics
 # ----------------------------
-
 st.write("## Pitch Type Metrics")
 
 st.dataframe(
@@ -216,10 +250,10 @@ st.dataframe(
     },
     use_container_width=True
 )
+
 # ----------------------------
 # Pitch Movement Plot
 # ----------------------------
-
 scatter_plot = px.scatter(
     filtered_data,
     x="pfx_x",
@@ -247,19 +281,16 @@ release_df = (
     .reset_index()
 )
 
-# Scale factor so lines are visible on movement plot
 scale_factor = 5
 
 # ----------------------------
 # Add Arm Slot Lines
 # ----------------------------
-
 for _, row in release_df.iterrows():
-    
     pitch = row["pitch_type"]
     x_val = row["release_pos_x"] * scale_factor
     y_val = row["release_pos_z"] * scale_factor
-    
+
     scatter_plot.add_trace(
         go.Scatter(
             x=[0, x_val],
@@ -278,7 +309,6 @@ for _, row in release_df.iterrows():
 # ----------------------------
 # Pitch Location Plot
 # ----------------------------
-
 scatter_plot_2 = px.scatter(
     filtered_data,
     x="plate_x",
@@ -292,8 +322,6 @@ scatter_plot_2 = px.scatter(
     hover_data=["release_speed", "pitch_type"],
     color_discrete_map=pitch_colors_mapping
 )
-
-
 
 # Strike Zone Overlay
 scatter_plot_2.add_shape(
