@@ -164,17 +164,29 @@ else:
     team_abbrev = "STL"
     st.warning("Could not load FanGraphs data — using default team schedule and season summary will be unavailable.")
 
-# Dynamically fetch exact regular season start and end dates
+# Extract team from Statcast data instead of FanGraphs
+# Pull a small sample first just to get the team
 with st.spinner("Fetching season schedule..."):
+    try:
+        sample_data = get_filtered_data(
+            start_date=f"{season}-03-20",
+            end_date=f"{season}-09-30",
+            playerid=playerid
+        )
+        if not sample_data.empty:
+            # Player's team is whichever team they appear for most
+            team_abbrev = sample_data["home_team"].mode()[0]
+        else:
+            team_abbrev = "STL"
+    except Exception:
+        team_abbrev = "STL"
+
     try:
         start_date, end_date = get_season_dates(season, team_abbrev)
     except Exception as e:
         st.warning(f"Could not fetch schedule ({e}). Falling back to default dates.")
         start_date = f"{season}-03-20"
         end_date = f"{season}-09-30"
-
-st.caption(f"Regular season window: {start_date} → {end_date}")
-
 # ----------------------------
 # Fetch Statcast Data
 # ----------------------------
