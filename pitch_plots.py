@@ -62,40 +62,34 @@ def get_season_dates(season, team_abbrev):
     return start, end
 
 @st.cache_data
+def load_player_lookup():
+    from pybaseball import playerid_lookup
+    # Calling with no meaningful args loads the full Chadwick register
+    return playerid_lookup("", fuzzy=True)
+
+@st.cache_data
 def search_players(query):
-    query = query.strip()
-    results = pd.DataFrame()
+    query = query.strip().lower()
     parts = query.split(" ", 1)
 
+    df = load_player_lookup()
+
     if len(parts) == 2:
-        # Full name entered — only do exact first + last lookup
-        try:
-            by_full = playerid_lookup(parts[1], parts[0])
-            if not by_full.empty:
-                results = pd.concat([results, by_full])
-        except Exception:
-            pass
+        # Match first and last name together
+        mask = (
+            df["name_first"].str.lower().str.contains(parts[0], na=False) &
+            df["name_last"].str.lower().str.contains(parts[1], na=False)
+        )
     else:
-        # Single word — try as last name first, then as first name
-        try:
-            by_last = playerid_lookup(parts[0])
-            if not by_last.empty:
-                results = pd.concat([results, by_last])
-        except Exception:
-            pass
+        # Match either first or last name
+        mask = (
+            df["name_first"].str.lower().str.contains(query, na=False) |
+            df["name_last"].str.lower().str.contains(query, na=False)
+        )
 
-        try:
-            by_first = playerid_lookup("", parts[0])
-            if not by_first.empty:
-                results = pd.concat([results, by_first])
-        except Exception:
-            pass
-
-    if results.empty:
-        return pd.DataFrame()
-
-    results = results.drop_duplicates(subset=["key_mlbam"])
+    results = df[mask].copy()
     results = results[results["key_mlbam"].notna() & (results["key_mlbam"] != "")]
+    results = results.drop_duplicates(subset=["key_mlbam"])
 
     return results.reset_index(drop=True)
 # ----------------------------
