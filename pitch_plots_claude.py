@@ -254,9 +254,14 @@ metrics_df["InZone%"] = (
     metrics_df["InZone"] / metrics_df["Pitches"]
 ) * 100
 
+metrics_df["Pitch%"] = (
+    metrics_df["Pitches"] / metrics_df["Pitches"].sum()
+) * 100
+
 metrics_df = metrics_df[[
     "pitch_type",
     "Pitches",
+    "Pitch%",
     "Whiff%",
     "InZone%"
 ]]
@@ -287,6 +292,7 @@ st.write("## Pitch Type Metrics")
 st.dataframe(
     metrics_df,
     column_config={
+        "Pitch%": st.column_config.NumberColumn(format="%.1f%%"),
         "Whiff%": st.column_config.NumberColumn(format="%.1f%%"),
         "InZone%": st.column_config.NumberColumn(format="%.1f%%")
     },
