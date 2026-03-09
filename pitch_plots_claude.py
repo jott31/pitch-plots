@@ -70,34 +70,6 @@ def load_lookup_table():
     """
     return get_lookup_table()
 
-def search_players(query, lookup_table):
-    """
-    Search the local lookup table by partial first name, last name,
-    or full name. Returns matching rows with valid MLBAM ids.
-    Mirrors the MILB dashboard's real-time filter: matches against
-    full name or team (here: name_first + name_last).
-    """
-    query = query.strip().lower()
-    parts = query.split(" ", 1)
-    df = lookup_table.copy()
-
-    if len(parts) == 2:
-        # Two words — match first name + last name together
-        mask = (
-            df["name_first"].str.lower().str.contains(parts[0], na=False) &
-            df["name_last"].str.lower().str.contains(parts[1], na=False)
-        )
-    else:
-        # Single word — match either first or last name
-        mask = (
-            df["name_first"].str.lower().str.contains(query, na=False) |
-            df["name_last"].str.lower().str.contains(query, na=False)
-        )
-
-    results = df[mask].copy()
-    results = results[results["key_mlbam"].notna() & (results["key_mlbam"] != "")]
-    results = results.drop_duplicates(subset=["key_mlbam"])
-    return results.reset_index(drop=True)
 
 # ----------------------------
 # App Title
@@ -111,56 +83,46 @@ with st.spinner("Loading player database..."):
     lookup_table = load_lookup_table()
 
 # ----------------------------
-# FIND PITCHER — Sidebar Search (mirrors MILB dashboard UX)
+# FIND PITCHER — Single searchable selectbox (type to filter, click to select)
 # ----------------------------
 st.sidebar.header("🔍 Find Pitcher")
 
-search_query = st.sidebar.text_input(
-    "Search by name",
-    value="",
-    placeholder="e.g. Hunter Greene",
-    help="Type a first name, last name, or both"
-)
-
-if not search_query or len(search_query.strip()) < 2:
-    st.sidebar.info("Enter at least 2 characters to search.")
-    st.info("👈 Use the sidebar to search for a pitcher to get started.")
-    st.stop()
-
-# Run search and display filtered player list in the sidebar
-player_results = search_players(search_query, lookup_table)
-
-if player_results.empty:
-    st.sidebar.error("No players found. Try a different name.")
-    st.stop()
-
-# Build display options — include play years to disambiguate common names
-# Mirrors MILB dashboard's player-item rows: name + team/meta + hand info
+# Build the full player list once for the selectbox
 named_id_mapping = {}
 player_labels = []
 
-for _, row in player_results.iterrows():
+valid_players = lookup_table[
+    lookup_table["key_mlbam"].notna() & (lookup_table["key_mlbam"] != "")
+].drop_duplicates(subset=["key_mlbam"]).copy()
+
+for _, row in valid_players.iterrows():
     first = str(row["name_first"]).title()
     last = str(row["name_last"]).title()
     first_year = int(row["mlb_played_first"]) if pd.notna(row.get("mlb_played_first")) else None
     last_year = int(row["mlb_played_last"]) if pd.notna(row.get("mlb_played_last")) else None
     year_str = f" ({first_year}–{last_year})" if first_year else ""
     label = f"{first} {last}{year_str}"
-    player_labels.append(label)
-    named_id_mapping[label] = {
-        "mlbam": row["key_mlbam"],
-        "fangraphs": row["key_fangraphs"],
-        "display_name": f"{first} {last}",
-    }
+    if label not in named_id_mapping:
+        player_labels.append(label)
+        named_id_mapping[label] = {
+            "mlbam": row["key_mlbam"],
+            "fangraphs": row["key_fangraphs"],
+            "display_name": f"{first} {last}",
+        }
 
-# Show result count (mirrors MILB dashboard filtered list behaviour)
-st.sidebar.caption(f"{len(player_labels)} pitcher(s) found")
-
+# Single box: type a name to filter the dropdown, then select
 selected_label = st.sidebar.selectbox(
-    "Select Pitcher",
+    "Search & select pitcher",
     options=player_labels,
-    help="Choose a pitcher from the filtered results"
+    index=None,
+    placeholder="Type a name to search…",
+    help="Start typing a first or last name — the list filters as you type"
 )
+
+if selected_label is None:
+    st.sidebar.info("Type a name above to find a pitcher.")
+    st.info("👈 Use the sidebar to search for a pitcher to get started.")
+    st.stop()
 
 playerid = named_id_mapping[selected_label]["mlbam"]
 fangraphs_id = named_id_mapping[selected_label]["fangraphs"]
