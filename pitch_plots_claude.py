@@ -129,15 +129,41 @@ fangraphs_id = named_id_mapping[selected_label]["fangraphs"]
 selected_player_name = named_id_mapping[selected_label]["display_name"]
 
 # ----------------------------
-# Season / Year Selection (sidebar, consistent with MILB dashboard's season selector)
+# Season / Year Selection — only seasons with Statcast data for this pitcher
 # ----------------------------
 st.sidebar.markdown("---")
 st.sidebar.header("📅 Season")
 
-current_year = pd.Timestamp.now().year
-available_years = list(range(2015, current_year + 1))
+@st.cache_data
+def get_available_seasons(playerid):
+    """
+    Scan each year from 2015 to present and return only seasons
+    where this pitcher has Statcast pitch data.
+    """
+    current_year = pd.Timestamp.now().year
+    available = []
+    for yr in range(current_year, 2014, -1):
+        try:
+            sample = statcast_pitcher(
+                start_dt=f"{yr}-03-20",
+                end_dt=f"{yr}-11-01",
+                player_id=playerid
+            )
+            if sample is not None and not sample.empty:
+                available.append(yr)
+        except Exception:
+            continue
+    return available
 
-season = st.sidebar.selectbox("Select Season", options=available_years[::-1], index=0)
+with st.sidebar:
+    with st.spinner("Finding available seasons..."):
+        available_years = get_available_seasons(playerid)
+
+if not available_years:
+    st.sidebar.error("No Statcast data found for this pitcher.")
+    st.stop()
+
+season = st.sidebar.selectbox("Select Season", options=available_years, index=0)
 
 # ----------------------------
 # Fetch Season Stats
