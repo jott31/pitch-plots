@@ -26,6 +26,24 @@ pitch_colors_mapping = {
     "UN": "#9C8975"
 }
 
+pitch_name_mapping = {
+    "FF": "4-Seam Fastball",
+    "SI": "Sinker",
+    "FC": "Cutter",
+    "CH": "Changeup",
+    "FS": "Splitter",
+    "SL": "Slider",
+    "ST": "Sweeper",
+    "SV": "Slurve",
+    "KC": "Knuckle-Curve",
+    "CU": "Curveball",
+    "CS": "Slow Curve",
+    "KN": "Knuckleball",
+    "EP": "Eephus",
+    "PO": "Pitch Out",
+    "UN": "Unknown"
+}
+
 # ----------------------------
 # Cached Data Functions
 # ----------------------------
@@ -318,6 +336,21 @@ else:
 # Pitch Type Metrics
 # ----------------------------
 st.write("## Pitch Type Metrics")
+
+# Pitch abbreviation legend — only show pitch types present in the data
+active_pitches = metrics_df["pitch_type"].dropna().unique()
+legend_items = [
+    f"**{code}** — {pitch_name_mapping.get(code, code)}"
+    for code in sorted(active_pitches)
+]
+with st.expander("Pitch Type Legend", expanded=False):
+    cols = st.columns(3)
+    for i, item in enumerate(legend_items):
+        color = pitch_colors_mapping.get(item.split(" ")[0].strip("*"), "#888")
+        cols[i % 3].markdown(
+            f"<span style='color:{color}; font-size:14px'>●</span> {item}",
+            unsafe_allow_html=True
+        )
 
 st.dataframe(
     metrics_df,
