@@ -105,9 +105,22 @@ with st.spinner("Loading player database..."):
 # ----------------------------
 st.sidebar.header("🔍 Find Pitcher")
 
-# Build the full player list once for the selectbox
+import unicodedata
+
+def strip_accents(text):
+    """
+    Normalize accented characters to their ASCII equivalent so that
+    e.g. 'Valdez' matches 'Valdéz' and 'Pena' matches 'Peña'.
+    """
+    return unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode("ascii")
+
+# Build the full player list once for the selectbox.
+# We store two parallel structures:
+#   player_labels      — display labels with proper accents (shown in UI)
+#   player_labels_norm — accent-stripped versions (used for search matching)
 named_id_mapping = {}
 player_labels = []
+player_labels_norm = []
 
 valid_players = lookup_table[
     lookup_table["key_mlbam"].notna() & (lookup_table["key_mlbam"] != "")
@@ -122,19 +135,44 @@ for _, row in valid_players.iterrows():
     label = f"{first} {last}{year_str}"
     if label not in named_id_mapping:
         player_labels.append(label)
+        player_labels_norm.append(strip_accents(label).lower())
         named_id_mapping[label] = {
             "mlbam": row["key_mlbam"],
             "fangraphs": row["key_fangraphs"],
             "display_name": f"{first} {last}",
         }
 
-# Single box: type a name to filter the dropdown, then select
+# Search input — accent-folded matching against the full player list
+search_query = st.sidebar.text_input(
+    "Search pitcher",
+    value="",
+    placeholder="e.g. Valdez, Pena, Nootbaar…",
+    help="Accents are handled automatically — 'Pena' will match 'Peña'"
+)
+
+if not search_query or len(search_query.strip()) < 2:
+    st.sidebar.info("Type at least 2 characters to search.")
+    st.info("👈 Use the sidebar to search for a pitcher to get started.")
+    st.stop()
+
+# Filter labels using accent-stripped comparison
+query_norm = strip_accents(search_query.strip()).lower()
+matched_labels = [
+    label for label, norm in zip(player_labels, player_labels_norm)
+    if query_norm in norm
+]
+
+if not matched_labels:
+    st.sidebar.error("No players found. Try a different name.")
+    st.stop()
+
+st.sidebar.caption(f"{len(matched_labels)} pitcher(s) found")
+
 selected_label = st.sidebar.selectbox(
-    "Search & select pitcher",
-    options=player_labels,
-    index=None,
-    placeholder="Type a name to search…",
-    help="Start typing a first or last name — the list filters as you type"
+    "Select pitcher",
+    options=matched_labels,
+    index=0,
+    help="Choose from the filtered results above"
 )
 
 if selected_label is None:
