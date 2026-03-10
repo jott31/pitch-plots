@@ -344,8 +344,9 @@ def build_summary_df(pitcher_list):
             for pt, cnt in sorted(type_counts.items(), key=lambda i: -i[1])[:5]
         )
 
-        strikes = sum(1 for x in pitches if any(s in (x["result"] or "").lower()
-                     for s in ["strike", "foul"]))
+        strike_results = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
+                          "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
+        strikes = sum(1 for x in pitches if (x["result"] or "") in strike_results)
         in_zone = sum(1 for x in pitches if isinstance(x.get("balls"), int)
                       and x.get("p_z") is not None
                       and 1.5 <= x["p_z"] <= 3.5
@@ -443,10 +444,11 @@ max_v   = f"{velos.max():.1f} mph"  if len(velos) else "—"
 swing_r  = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul", "Foul Tip",
             "In play, out(s)", "In play, no out", "In play, runs"}
 whiff_r  = {"Swinging Strike", "Swinging Strike (Blocked)"}
-strike_r = lambda r: any(s in r.lower() for s in ["strike", "foul"])
+strike_r = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
+             "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
 swings   = df["result"].isin(swing_r).sum()
 whiffs   = int(df["result"].isin(whiff_r).sum())
-strikes  = int(df["result"].apply(lambda r: strike_r(r) if isinstance(r, str) else False).sum())
+strikes  = int(df["result"].isin(strike_r).sum())
 balls    = int(df["result"].apply(lambda r: (r or "").lower().startswith("ball")).sum())
 in_zone  = int(df[df["p_z"].between(1.5, 3.5) & df["p_x"].between(-0.83, 0.83)].shape[0]) if "p_z" in df else 0
 
@@ -472,7 +474,7 @@ if not df.empty:
         v     = sub["velo"].dropna()
         sw    = sub["result"].isin(swing_r).sum()
         wh    = sub["result"].isin(whiff_r).sum()
-        str_count = sub["result"].apply(lambda r: strike_r(r) if isinstance(r, str) else False).sum()
+        str_count = sub["result"].isin(strike_r).sum()
         bl_count  = sub["result"].apply(lambda r: (r or "").lower().startswith("ball")).sum()
         iz_count  = sub[sub["p_z"].between(1.5, 3.5) & sub["p_x"].between(-0.83, 0.83)].shape[0] if "p_z" in sub else 0
         breakdown_rows.append({
