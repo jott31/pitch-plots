@@ -1,0 +1,499 @@
+import requests
+from datetime import datetime, timezone
+import streamlit as st
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+
+st.set_page_config(page_title="Live Games", page_icon="⚾", layout="wide")
+
+# ----------------------------
+# Constants
+# ----------------------------
+BASE      = "https://statsapi.mlb.com/api/v1"
+BASE_LIVE = "https://statsapi.mlb.com/api/v1.1"
+
+PITCH_NAMES = {
+    "FF": "4-Seam Fastball", "FA": "4-Seam Fastball",
+    "SI": "Sinker",          "FT": "Sinker",
+    "FC": "Cutter",
+    "SL": "Slider",          "ST": "Sweeper",
+    "CU": "Curveball",       "KC": "Knuckle-Curve",
+    "CH": "Changeup",
+    "FS": "Splitter",        "FO": "Forkball",
+    "KN": "Knuckleball",
+    "EP": "Eephus",
+}
+
+PITCH_COLORS = {
+    "FF": "#FF007D", "FA": "#FF007D",
+    "SI": "#98165D", "FT": "#98165D",
+    "FC": "#BE5FA0",
+    "SL": "#67E18D", "ST": "#1BB999",
+    "CU": "#3025CE", "KC": "#311D8B",
+    "CH": "#F79E70",
+    "FS": "#FE6100", "FO": "#FE6100",
+    "KN": "#867A08",
+    "EP": "#648FFF",
+}
+
+def pitch_name(code):
+    return PITCH_NAMES.get(code, code or "Unknown")
+
+def pitch_color(code):
+    return PITCH_COLORS.get(code, "#9C8975")
+
+# ----------------------------
+# API helpers
+# ----------------------------
+@st.cache_data(ttl=30)   # short TTL so live data stays fresh
+def fetch_today_games(game_type: str) -> list:
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    url = (
+        f"{BASE}/schedule?sportId=1"
+        f"&date={date_str}"
+        f"&gameType={game_type}"
+        f"&hydrate=teams,linescore,decisions,pitchers"
+    )
+    r = requests.get(url, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    games = []
+    for d in data.get("dates", []):
+        for g in d.get("games", []):
+            games.append(g)
+    return games
+
+@st.cache_data(ttl=30)
+def fetch_live_feed(game_pk: int) -> dict:
+    url = f"{BASE_LIVE}/game/{game_pk}/feed/live"
+    r = requests.get(url, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+# ----------------------------
+# Data extraction
+# ----------------------------
+def extract_pitchers(feed: dict) -> dict:
+    """
+    Extract all pitchers and their pitches from a live game feed.
+    Returns dict: pitcher_id -> {name, team, pitches[]}
+    """
+    away_abbr = feed.get("gameData", {}).get("teams", {}).get("away", {}).get("abbreviation", "?")
+    home_abbr = feed.get("gameData", {}).get("teams", {}).get("home", {}).get("abbreviation", "?")
+
+    box = feed.get("liveData", {}).get("boxscore", {}).get("teams", {})
+    away_ids = set(box.get("away", {}).get("pitchers", []))
+    home_ids = set(box.get("home", {}).get("pitchers", []))
+
+    pitcher_map = {}
+    all_plays = feed.get("liveData", {}).get("plays", {}).get("allPlays", [])
+
+    for play in all_plays:
+        pitcher = play.get("matchup", {}).get("pitcher")
+        if not pitcher:
+            continue
+        pid   = pitcher["id"]
+        pname = pitcher.get("fullName", "Unknown")
+
+        if pid not in pitcher_map:
+            if pid in away_ids:
+                team = away_abbr
+            elif pid in home_ids:
+                team = home_abbr
+            else:
+                half = play.get("about", {}).get("halfInning", "")
+                team = home_abbr if half == "top" else away_abbr
+            pitcher_map[pid] = {"id": pid, "name": pname, "team": team, "pitches": []}
+
+        batter   = play.get("matchup", {}).get("batter", {}).get("fullName", "")
+        bat_side = play.get("matchup", {}).get("batSide", {}).get("code", "?")
+        inning   = play.get("about", {}).get("inning", "?")
+        half     = "Top" if play.get("about", {}).get("halfInning") == "top" else "Bot"
+        outs     = play.get("count", {}).get("outs", 0)
+        away_sc  = play.get("result", {}).get("awayScore", "?")
+        home_sc  = play.get("result", {}).get("homeScore", "?")
+        scoreline = f"{away_abbr} {away_sc} - {home_sc} {home_abbr}"
+
+        for ev in play.get("playEvents", []):
+            if not ev.get("isPitch"):
+                continue
+            pd_  = ev.get("pitchData") or {}
+            coords = pd_.get("coordinates", {})
+            breaks = pd_.get("breaks", {})
+
+            pitch_type = ev.get("details", {}).get("type", {}).get("code", "XX")
+            velo       = pd_.get("startSpeed")
+            pfx_x      = breaks.get("breakHorizontal") or pd_.get("pfxX")
+            pfx_z      = breaks.get("breakVertical")   or pd_.get("pfxZ")
+            p_x        = coords.get("pX")
+            p_z        = coords.get("pZ")
+            spin_rate  = breaks.get("spinRate")
+            result     = ev.get("details", {}).get("description", "")
+            balls      = ev.get("count", {}).get("balls", "?")
+            strikes    = ev.get("count", {}).get("strikes", "?")
+
+            pitcher_map[pid]["pitches"].append({
+                "pitch_type": pitch_type,
+                "pitch_name": pitch_name(pitch_type),
+                "velo":       round(velo,  1) if velo  is not None else None,
+                "pfx_x":      round(pfx_x, 2) if pfx_x is not None else None,
+                "pfx_z":      round(pfx_z, 2) if pfx_z is not None else None,
+                "p_x":        round(p_x,   2) if p_x   is not None else None,
+                "p_z":        round(p_z,   2) if p_z   is not None else None,
+                "spin_rate":  round(spin_rate) if spin_rate is not None else None,
+                "result":     result,
+                "balls":      balls,
+                "strikes":    strikes,
+                "batter":     batter,
+                "bat_side":   bat_side,
+                "inning":     inning,
+                "half":       half,
+                "outs":       outs,
+                "scoreline":  scoreline,
+            })
+
+    return pitcher_map
+
+def game_status_label(game: dict) -> str:
+    state  = game.get("status", {}).get("abstractGameState", "")
+    detail = game.get("status", {}).get("detailedState", "")
+    if state == "Live":
+        ls      = game.get("linescore", {})
+        top     = ls.get("isTopInning", True)
+        inning  = ls.get("currentInning", "?")
+        half    = "▲" if top else "▼"
+        a_runs  = game.get("linescore", {}).get("teams", {}).get("away", {}).get("runs", "?")
+        h_runs  = game.get("linescore", {}).get("teams", {}).get("home", {}).get("runs", "?")
+        return f"🔴 LIVE  {a_runs}–{h_runs}  {half}{inning}"
+    if state == "Final":
+        a_runs = game.get("linescore", {}).get("teams", {}).get("away", {}).get("runs", "")
+        h_runs = game.get("linescore", {}).get("teams", {}).get("home", {}).get("runs", "")
+        return f"Final  {a_runs}–{h_runs}"
+    # Pre-game: show start time in local timezone
+    game_date = game.get("gameDate", "")
+    if game_date:
+        try:
+            dt = datetime.fromisoformat(game_date.replace("Z", "+00:00"))
+            return dt.astimezone().strftime("%-I:%M %p")
+        except Exception:
+            pass
+    return detail or "Scheduled"
+
+# ----------------------------
+# Page layout
+# ----------------------------
+st.title("⚾ Live Games")
+
+# Sidebar controls
+st.sidebar.header("Game Settings")
+
+game_type = st.sidebar.radio(
+    "Game Type",
+    options=["R", "S"],
+    format_func=lambda x: "Regular Season" if x == "R" else "Spring Training",
+    horizontal=True,
+)
+
+if st.sidebar.button("↻ Refresh Games"):
+    st.cache_data.clear()
+
+# ----------------------------
+# Load today's games
+# ----------------------------
+try:
+    with st.spinner("Loading today's games..."):
+        games = fetch_today_games(game_type)
+except Exception as e:
+    st.error(f"Could not load games: {e}")
+    st.stop()
+
+today_str = datetime.now().strftime("%A, %B %-d, %Y")
+st.caption(f"Games for {today_str} {'(Spring Training)' if game_type == 'S' else ''}")
+
+if not games:
+    label = "Spring Training" if game_type == "S" else "Regular Season"
+    st.info(f"No {label} games scheduled today. Try switching game type in the sidebar.")
+    st.stop()
+
+# ----------------------------
+# Game selector
+# ----------------------------
+def game_label(game):
+    away = game.get("teams", {}).get("away", {}).get("team", {}).get("abbreviation", "?")
+    home = game.get("teams", {}).get("home", {}).get("team", {}).get("abbreviation", "?")
+    status = game_status_label(game)
+    return f"{away} @ {home}  —  {status}"
+
+game_options = {game_label(g): g for g in games}
+
+selected_game_label = st.selectbox(
+    "Select Game",
+    options=list(game_options.keys()),
+    index=0,
+)
+selected_game = game_options[selected_game_label]
+game_pk = selected_game["gamePk"]
+
+# ----------------------------
+# Load game feed
+# ----------------------------
+try:
+    with st.spinner("Loading pitch data..."):
+        feed = fetch_live_feed(game_pk)
+except Exception as e:
+    st.error(f"Could not load game data: {e}")
+    st.stop()
+
+pitcher_map = extract_pitchers(feed)
+
+away = selected_game.get("teams", {}).get("away", {}).get("team", {})
+home = selected_game.get("teams", {}).get("home", {}).get("team", {})
+away_abbr = away.get("abbreviation", "?")
+home_abbr = home.get("abbreviation", "?")
+is_live   = selected_game.get("status", {}).get("abstractGameState") == "Live"
+
+# Game header
+state_label = game_status_label(selected_game)
+st.subheader(f"{away.get('name','?')} @ {home.get('name','?')}")
+st.caption(f"{state_label}  ·  {selected_game.get('venue',{}).get('name','')}"
+           + ("  ·  Auto-refresh: reload page for live updates" if is_live else ""))
+
+pitchers_with_pitches = {
+    pid: p for pid, p in pitcher_map.items() if len(p["pitches"]) > 0
+}
+
+if not pitchers_with_pitches:
+    status_state = selected_game.get("status", {}).get("abstractGameState", "")
+    if status_state == "Preview":
+        st.info("⏰ Game hasn't started yet — no pitch data available.")
+    else:
+        st.info("📊 No pitch data found for this game.")
+    st.stop()
+
+# ----------------------------
+# Team pitching summary tables
+# ----------------------------
+def build_summary_df(pitcher_list):
+    rows = []
+    for p in pitcher_list:
+        pitches  = p["pitches"]
+        total    = len(pitches)
+        velos    = [x["velo"] for x in pitches if x["velo"] is not None]
+        avg_velo = round(sum(velos) / len(velos), 1) if velos else None
+        max_velo = round(max(velos), 1) if velos else None
+
+        swing_results = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
+        whiff_results = {"Swinging Strike", "Swinging Strike (Blocked)"}
+        swings = sum(1 for x in pitches if x["result"] in swing_results)
+        whiffs = sum(1 for x in pitches if x["result"] in whiff_results)
+        balls  = sum(1 for x in pitches if (x["result"] or "").lower().startswith("ball"))
+
+        # Arsenal summary
+        type_counts = {}
+        for x in pitches:
+            type_counts[x["pitch_type"]] = type_counts.get(x["pitch_type"], 0) + 1
+        arsenal = ", ".join(
+            f"{pt} {cnt/total*100:.0f}%"
+            for pt, cnt in sorted(type_counts.items(), key=lambda i: -i[1])[:5]
+        )
+
+        rows.append({
+            "Pitcher":   p["name"],
+            "Pitches":   total,
+            "Avg Velo":  avg_velo,
+            "Max Velo":  max_velo,
+            "Whiff%":    round(whiffs / swings * 100, 1) if swings else None,
+            "BB%":       round(balls / total * 100, 1) if total else None,
+            "Arsenal":   arsenal,
+        })
+    return pd.DataFrame(rows)
+
+def show_team_section(team_abbr, team_name, pitcher_ids):
+    team_pitchers = [
+        pitchers_with_pitches[pid]
+        for pid in pitcher_ids
+        if pid in pitchers_with_pitches
+    ]
+    if not team_pitchers:
+        return
+
+    team_pitchers.sort(key=lambda p: -len(p["pitches"]))
+
+    st.markdown(f"#### {team_abbr} — {team_name} Pitching")
+    summary_df = build_summary_df(team_pitchers)
+    st.dataframe(
+        summary_df,
+        column_config={
+            "Avg Velo": st.column_config.NumberColumn(format="%.1f mph"),
+            "Max Velo": st.column_config.NumberColumn(format="%.1f mph"),
+            "Whiff%":   st.column_config.NumberColumn(format="%.1f%%"),
+            "BB%":      st.column_config.NumberColumn(format="%.1f%%"),
+        },
+        use_container_width=True,
+        hide_index=True,
+    )
+
+box = feed.get("liveData", {}).get("boxscore", {}).get("teams", {})
+away_pitcher_ids = box.get("away", {}).get("pitchers", [])
+home_pitcher_ids = box.get("home", {}).get("pitchers", [])
+
+col1, col2 = st.columns(2)
+with col1:
+    show_team_section(away_abbr, away.get("name", away_abbr), away_pitcher_ids)
+with col2:
+    show_team_section(home_abbr, home.get("name", home_abbr), home_pitcher_ids)
+
+st.markdown("---")
+
+# ----------------------------
+# Pitcher drill-down
+# ----------------------------
+st.subheader("Pitcher Detail")
+
+pitcher_options = {
+    f"{p['name']} ({p['team']})  —  {len(p['pitches'])} pitches": pid
+    for pid, p in sorted(
+        pitchers_with_pitches.items(),
+        key=lambda i: -len(i[1]["pitches"])
+    )
+}
+
+selected_pitcher_label = st.selectbox(
+    "Select Pitcher",
+    options=list(pitcher_options.keys()),
+)
+selected_pid = pitcher_options[selected_pitcher_label]
+selected_pitcher = pitchers_with_pitches[selected_pid]
+pitches = selected_pitcher["pitches"]
+
+df = pd.DataFrame(pitches)
+
+# Pitch type filter
+pitch_types = sorted(df["pitch_type"].dropna().unique())
+selected_types = st.multiselect(
+    "Filter by Pitch Type",
+    options=pitch_types,
+    default=pitch_types,
+)
+df = df[df["pitch_type"].isin(selected_types)]
+
+# ----------------------------
+# Metrics row
+# ----------------------------
+total   = len(df)
+velos   = df["velo"].dropna()
+avg_v   = f"{velos.mean():.1f} mph" if len(velos) else "—"
+max_v   = f"{velos.max():.1f} mph"  if len(velos) else "—"
+
+swing_r = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul", "Foul Tip",
+           "In play, out(s)", "In play, no out", "In play, runs"}
+whiff_r = {"Swinging Strike", "Swinging Strike (Blocked)"}
+swings  = df["result"].isin(swing_r).sum()
+whiffs  = df["result"].isin(whiff_r).sum()
+whiff_pct = f"{whiffs/swings*100:.1f}%" if swings else "—"
+
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Pitches", total)
+m2.metric("Avg Velo", avg_v)
+m3.metric("Max Velo", max_v)
+m4.metric("Whiff%", whiff_pct)
+
+# ----------------------------
+# Pitch type breakdown table
+# ----------------------------
+if not df.empty:
+    breakdown_rows = []
+    for pt in sorted(df["pitch_type"].unique()):
+        sub   = df[df["pitch_type"] == pt]
+        n     = len(sub)
+        v     = sub["velo"].dropna()
+        sw    = sub["result"].isin(swing_r).sum()
+        wh    = sub["result"].isin(whiff_r).sum()
+        breakdown_rows.append({
+            "Pitch":     f"{pt} — {pitch_name(pt)}",
+            "Count":     n,
+            "Usage%":    round(n / total * 100, 1),
+            "Avg Velo":  round(v.mean(), 1) if len(v) else None,
+            "Max Velo":  round(v.max(),  1) if len(v) else None,
+            "Whiff%":    round(wh / sw * 100, 1) if sw else None,
+        })
+    breakdown_df = pd.DataFrame(breakdown_rows)
+    st.dataframe(
+        breakdown_df,
+        column_config={
+            "Usage%":   st.column_config.NumberColumn(format="%.1f%%"),
+            "Avg Velo": st.column_config.NumberColumn(format="%.1f mph"),
+            "Max Velo": st.column_config.NumberColumn(format="%.1f mph"),
+            "Whiff%":   st.column_config.NumberColumn(format="%.1f%%"),
+        },
+        use_container_width=True,
+        hide_index=True,
+    )
+
+# ----------------------------
+# Movement & Location plots
+# ----------------------------
+plot_df = df.dropna(subset=["pfx_x", "pfx_z"])
+loc_df  = df.dropna(subset=["p_x", "p_z"])
+
+col_left, col_right = st.columns(2)
+
+with col_left:
+    st.markdown("### Pitch Movement")
+    if not plot_df.empty:
+        fig = go.Figure()
+        for pt in plot_df["pitch_type"].unique():
+            sub = plot_df[plot_df["pitch_type"] == pt]
+            fig.add_trace(go.Scatter(
+                x=sub["pfx_x"], y=sub["pfx_z"],
+                mode="markers",
+                name=f"{pt} — {pitch_name(pt)}",
+                marker=dict(color=pitch_color(pt), size=8, opacity=0.8),
+                customdata=sub[["velo", "result", "batter"]],
+                hovertemplate=(
+                    "<b>%{fullData.name}</b><br>"
+                    "Velo: %{customdata[0]} mph<br>"
+                    "Result: %{customdata[1]}<br>"
+                    "Batter: %{customdata[2]}<extra></extra>"
+                ),
+            ))
+        fig.add_hline(y=0, line_color="white", line_width=1)
+        fig.add_vline(x=0, line_color="white", line_width=1)
+        fig.update_xaxes(title="Horizontal Break (in)", range=[25, -25])
+        fig.update_yaxes(title="Vertical Break (in)", range=[-25, 25])
+        fig.update_layout(height=420, legend=dict(orientation="h", y=-0.2))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No movement data available yet.")
+
+with col_right:
+    st.markdown("### Pitch Location")
+    if not loc_df.empty:
+        fig2 = px.scatter(
+            loc_df, x="p_x", y="p_z",
+            color="pitch_type",
+            color_discrete_map=PITCH_COLORS,
+            hover_data=["velo", "result", "batter", "pitch_name"],
+            labels={"p_x": "Horizontal", "p_z": "Height", "pitch_type": "Pitch"},
+        )
+        # Strike zone
+        fig2.add_shape(type="rect", x0=-0.83, x1=0.83, y0=1.5, y1=3.5,
+                       line=dict(color="white", width=2))
+        fig2.update_xaxes(range=[2, -2])
+        fig2.update_yaxes(range=[0, 6])
+        fig2.update_layout(height=420, legend=dict(orientation="h", y=-0.2))
+        st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("No location data available yet.")
+
+# ----------------------------
+# Pitch log table
+# ----------------------------
+with st.expander("Pitch Log", expanded=False):
+    log_cols = ["inning", "half", "batter", "bat_side", "pitch_type",
+                "pitch_name", "velo", "pfx_x", "pfx_z", "balls", "strikes", "result"]
+    available_cols = [c for c in log_cols if c in df.columns]
+    log_df = df[available_cols].copy()
+    log_df.columns = [c.replace("_", " ").title() for c in log_df.columns]
+    st.dataframe(log_df, use_container_width=True, hide_index=True)
