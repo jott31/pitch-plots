@@ -130,11 +130,12 @@ def extract_pitchers(feed: dict) -> dict:
 
             pitch_type  = ev.get("details", {}).get("type", {}).get("code", "XX")
             velo        = pd_.get("startSpeed")
+            # breakHorizontal is from catcher's perspective — negate for pitcher POV
             # breakVerticalInduced removes gravity, matching Statcast pfx_z convention
             raw_hbreak  = breaks.get("breakHorizontal")
             raw_vbreak  = breaks.get("breakVerticalInduced") or breaks.get("breakVertical")
-            pfx_x       = raw_hbreak if raw_hbreak is not None else pd_.get("pfxX")
-            pfx_z       = raw_vbreak if raw_vbreak  is not None else pd_.get("pfxZ")
+            pfx_x       = (-raw_hbreak) if raw_hbreak is not None else pd_.get("pfxX")
+            pfx_z       = raw_vbreak    if raw_vbreak  is not None else pd_.get("pfxZ")
             p_x         = coords.get("pX")
             p_z         = coords.get("pZ")
             # Release position for arm slot lines (x=horizontal, z=vertical at release)
