@@ -130,8 +130,12 @@ def extract_pitchers(feed: dict) -> dict:
 
             pitch_type = ev.get("details", {}).get("type", {}).get("code", "XX")
             velo       = pd_.get("startSpeed")
-            pfx_x      = breaks.get("breakHorizontal") or pd_.get("pfxX")
-            pfx_z      = breaks.get("breakVertical")   or pd_.get("pfxZ")
+            # breakHorizontal is from catcher's perspective — negate for pitcher POV
+            # breakVerticalInduced removes gravity component, matching Statcast pfx_z
+            raw_hbreak = breaks.get("breakHorizontal")
+            raw_vbreak = breaks.get("breakVerticalInduced") or breaks.get("breakVertical")
+            pfx_x = (-raw_hbreak) if raw_hbreak is not None else pd_.get("pfxX")
+            pfx_z = raw_vbreak    if raw_vbreak  is not None else pd_.get("pfxZ")
             p_x        = coords.get("pX")
             p_z        = coords.get("pZ")
             spin_rate  = breaks.get("spinRate")
