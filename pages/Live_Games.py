@@ -488,8 +488,8 @@ with col_left:
             ))
         fig.add_hline(y=0, line_color="white", line_width=1)
         fig.add_vline(x=0, line_color="white", line_width=1)
-        fig.update_xaxes(title="Horizontal Break (in)", range=[25, -25])
-        fig.update_yaxes(title="Vertical Break (in)", range=[-25, 25])
+        fig.update_xaxes(title="Horizontal Break (in)", range=[30, -30])
+        fig.update_yaxes(title="Vertical Break (in)", range=[-30, 30])
         fig.update_layout(height=420, legend=dict(orientation="h", y=-0.2))
         st.plotly_chart(fig, use_container_width=True)
     else:
