@@ -357,8 +357,8 @@ def build_summary_df(pitcher_list):
             "Avg Velo":  avg_velo,
             "Max Velo":  max_velo,
             "Whiffs":    whiffs,
-            "Strike%":   round(strikes / total * 100, 1) if total else None,
-            "Ball%":     round(balls / total * 100, 1) if total else None,
+            "Strikes":   strikes,
+            "Balls":     balls,
             "InZone%":   round(in_zone / total * 100, 1) if total else None,
             "Arsenal":   arsenal,
         })
@@ -382,8 +382,6 @@ def show_team_section(team_abbr, team_name, pitcher_ids):
         column_config={
             "Avg Velo": st.column_config.NumberColumn(format="%.1f mph"),
             "Max Velo": st.column_config.NumberColumn(format="%.1f mph"),
-            "Strike%":  st.column_config.NumberColumn(format="%.1f%%"),
-            "Ball%":    st.column_config.NumberColumn(format="%.1f%%"),
             "InZone%":  st.column_config.NumberColumn(format="%.1f%%"),
         },
         use_container_width=True,
@@ -452,8 +450,6 @@ strikes  = int(df["result"].apply(lambda r: strike_r(r) if isinstance(r, str) el
 balls    = int(df["result"].apply(lambda r: (r or "").lower().startswith("ball")).sum())
 in_zone  = int(df[df["p_z"].between(1.5, 3.5) & df["p_x"].between(-0.83, 0.83)].shape[0]) if "p_z" in df else 0
 
-strike_pct = f"{strikes/total*100:.1f}%" if total else "—"
-ball_pct   = f"{balls/total*100:.1f}%"   if total else "—"
 in_zone_pct = f"{in_zone/total*100:.1f}%" if total else "—"
 
 m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
@@ -461,8 +457,8 @@ m1.metric("Pitches", total)
 m2.metric("Avg Velo", avg_v)
 m3.metric("Max Velo", max_v)
 m4.metric("Whiffs", whiffs)
-m5.metric("Strike%", strike_pct)
-m6.metric("Ball%", ball_pct)
+m5.metric("Strikes", strikes)
+m6.metric("Balls", balls)
 m7.metric("In Zone%", in_zone_pct)
 
 # ----------------------------
@@ -486,8 +482,8 @@ if not df.empty:
             "Avg Velo":  round(v.mean(), 1) if len(v) else None,
             "Max Velo":  round(v.max(),  1) if len(v) else None,
             "Whiffs":    int(wh),
-            "Strike%":   round(str_count / n * 100, 1) if n else None,
-            "Ball%":     round(bl_count  / n * 100, 1) if n else None,
+            "Strikes":   int(str_count),
+            "Balls":     int(bl_count),
             "InZone%":   round(iz_count  / n * 100, 1) if n else None,
         })
     breakdown_df = pd.DataFrame(breakdown_rows)
@@ -497,8 +493,6 @@ if not df.empty:
             "Usage%":   st.column_config.NumberColumn(format="%.1f%%"),
             "Avg Velo": st.column_config.NumberColumn(format="%.1f mph"),
             "Max Velo": st.column_config.NumberColumn(format="%.1f mph"),
-            "Strike%":  st.column_config.NumberColumn(format="%.1f%%"),
-            "Ball%":    st.column_config.NumberColumn(format="%.1f%%"),
             "InZone%":  st.column_config.NumberColumn(format="%.1f%%"),
         },
         use_container_width=True,
