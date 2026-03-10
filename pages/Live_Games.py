@@ -48,7 +48,13 @@ def pitch_color(code):
 # ----------------------------
 @st.cache_data(ttl=30)   # short TTL so live data stays fresh
 def fetch_today_games(game_type: str) -> list:
-    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        from zoneinfo import ZoneInfo
+        date_str = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except ImportError:
+        # fallback: subtract 5 hours from UTC as approximation of ET
+        from datetime import timedelta
+        date_str = (datetime.now(timezone.utc) - timedelta(hours=5)).strftime("%Y-%m-%d")
     url = (
         f"{BASE}/schedule?sportId=1"
         f"&date={date_str}"
@@ -208,7 +214,11 @@ except Exception as e:
     st.error(f"Could not load games: {e}")
     st.stop()
 
-today_str = datetime.now().strftime("%A, %B %-d, %Y")
+try:
+    from zoneinfo import ZoneInfo
+    today_str = datetime.now(ZoneInfo("America/New_York")).strftime("%A, %B %-d, %Y")
+except ImportError:
+    today_str = datetime.now().strftime("%A, %B %-d, %Y")
 st.caption(f"Games for {today_str} {'(Spring Training)' if game_type == 'S' else ''}")
 
 if not games:
@@ -219,9 +229,27 @@ if not games:
 # ----------------------------
 # Game selector
 # ----------------------------
+def get_team_abbr(game, side):
+    """Extract team abbreviation with multiple fallback paths."""
+    teams = game.get("teams", {})
+    side_data = teams.get(side, {})
+    # Path 1: teams.away.team.abbreviation (hydrated)
+    abbr = side_data.get("team", {}).get("abbreviation")
+    if abbr:
+        return abbr
+    # Path 2: teams.away.abbreviation (some responses)
+    abbr = side_data.get("abbreviation")
+    if abbr:
+        return abbr
+    # Path 3: fall back to team name initials
+    name = side_data.get("team", {}).get("name") or side_data.get("name")
+    if name:
+        return name[:3].upper()
+    return "?"
+
 def game_label(game):
-    away = game.get("teams", {}).get("away", {}).get("team", {}).get("abbreviation", "?")
-    home = game.get("teams", {}).get("home", {}).get("team", {}).get("abbreviation", "?")
+    away = get_team_abbr(game, "away")
+    home = get_team_abbr(game, "home")
     status = game_status_label(game)
     return f"{away} @ {home}  —  {status}"
 
@@ -247,10 +275,10 @@ except Exception as e:
 
 pitcher_map = extract_pitchers(feed)
 
-away = selected_game.get("teams", {}).get("away", {}).get("team", {})
-home = selected_game.get("teams", {}).get("home", {}).get("team", {})
-away_abbr = away.get("abbreviation", "?")
-home_abbr = home.get("abbreviation", "?")
+away = selected_game.get("teams", {}).get("away", {}).get("team", {}) or selected_game.get("teams", {}).get("away", {})
+home = selected_game.get("teams", {}).get("home", {}).get("team", {}) or selected_game.get("teams", {}).get("home", {})
+away_abbr = get_team_abbr(selected_game, "away")
+home_abbr = get_team_abbr(selected_game, "home")
 is_live   = selected_game.get("status", {}).get("abstractGameState") == "Live"
 
 # Game header
