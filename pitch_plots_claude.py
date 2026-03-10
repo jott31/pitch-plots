@@ -101,21 +101,18 @@ with st.spinner("Loading player database..."):
     lookup_table = load_lookup_table()
 
 # ----------------------------
-# FIND PITCHER — Single searchable selectbox with accent-folding
+# FIND PITCHER — Accent-folding search
 # ----------------------------
 st.sidebar.header("🔍 Find Pitcher")
 
 import unicodedata
 
 def strip_accents(text):
-    # Strip diacritics so 'Pena' matches 'Pena' and 'Valdez' matches 'Valdez'
     return unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode("ascii")
 
-# The selectbox search matches against the option values directly.
-# Strategy: use the accent-stripped name as the option key (what gets searched),
-# and store the pretty accented name in a dict for display and lookups.
-named_id_mapping = {}   # norm_label -> {mlbam, fangraphs, display_name, pretty_label}
-player_options = []     # list of accent-stripped labels (used as selectbox values)
+# Build lookup: norm_label -> player info + pretty display label
+named_id_mapping = {}
+norm_to_pretty = {}   # norm_label -> pretty display label
 
 valid_players = lookup_table[
     lookup_table["key_mlbam"].notna() & (lookup_table["key_mlbam"] != "")
@@ -127,34 +124,55 @@ for _, row in valid_players.iterrows():
     first_year = int(row["mlb_played_first"]) if pd.notna(row.get("mlb_played_first")) else None
     last_year = int(row["mlb_played_last"]) if pd.notna(row.get("mlb_played_last")) else None
     year_str = f" ({first_year}–{last_year})" if first_year else ""
-    display_label = f"{first} {last}{year_str}"  # e.g. "Framber Valdéz (2020–2024)"
-    norm_label = strip_accents(display_label)     # e.g. "Framber Valdez (2020-2024)"
+    display_label = f"{first} {last}{year_str}"
+    norm_label = strip_accents(display_label)
     if norm_label not in named_id_mapping:
-        player_options.append(norm_label)
         named_id_mapping[norm_label] = {
             "mlbam": row["key_mlbam"],
             "fangraphs": row["key_fangraphs"],
             "display_name": f"{first} {last}",
-            "pretty_label": display_label,
         }
+        norm_to_pretty[norm_label] = display_label
 
-# Selectbox searches the norm_label values (accent-free), so typing
-# "Pena" will surface "Pena" which maps back to "Peña" for display.
+# Two widgets, one UX: a text input that filters the selectbox below it.
+# The text input does accent-folding; the selectbox shows only matched results.
+# Hiding the selectbox label makes them read as a single search control.
+search_query = st.sidebar.text_input(
+    "Search pitcher",
+    value="",
+    placeholder="Type a name… e.g. Pena, Valdez",
+    label_visibility="collapsed",
+)
+st.sidebar.caption("🔍 Search by name — accents optional")
+
+if not search_query or len(search_query.strip()) < 2:
+    st.sidebar.info("Type at least 2 characters.")
+    st.info("👈 Use the sidebar to search for a pitcher.")
+    st.stop()
+
+query_norm = strip_accents(search_query.strip()).lower()
+matched_norms = [n for n in named_id_mapping if query_norm in n.lower()]
+
+if not matched_norms:
+    st.sidebar.error("No players found. Try a different spelling.")
+    st.stop()
+
+# Sort matched results and show count
+matched_norms.sort()
+st.sidebar.caption(f"{len(matched_norms)} result(s)")
+
 selected_norm = st.sidebar.selectbox(
-    "Search & select pitcher",
-    options=player_options,
-    index=None,
-    format_func=lambda norm: named_id_mapping[norm]["pretty_label"],
-    placeholder="Type a name to search…",
-    help="Accents handled automatically — 'Pena' finds 'Peña', 'Valdez' finds 'Valdéz'"
+    "Select pitcher",
+    options=matched_norms,
+    format_func=lambda n: norm_to_pretty[n],
+    index=0,
+    label_visibility="collapsed",
 )
 
 if selected_norm is None:
-    st.sidebar.info("Type a name above to find a pitcher.")
-    st.info("👈 Use the sidebar to search for a pitcher to get started.")
     st.stop()
 
-selected_label = named_id_mapping[selected_norm]["pretty_label"]
+selected_label = norm_to_pretty[selected_norm]
 
 playerid = named_id_mapping[selected_norm]["mlbam"]
 fangraphs_id = named_id_mapping[selected_norm]["fangraphs"]
