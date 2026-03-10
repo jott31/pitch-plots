@@ -111,12 +111,12 @@ def strip_accents(text):
     """Strip diacritics so 'Pena' matches 'Peña', 'Valdez' matches 'Valdéz', etc."""
     return unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode("ascii")
 
-# Build player options as "Display Name\x00normalized_name" so that:
+# Build player options as "Display Name|||normalized_name" so that:
 #   - format_func shows only the accented display name in the UI
 #   - Streamlit's native selectbox search matches against the full raw string,
 #     which includes the accent-stripped suffix — giving us accent-folding for free.
 named_id_mapping = {}
-player_options = []  # raw option values: "Framber Valdéz (2020–2024)\x00framber valdez (2020-2024)"
+player_options = []  # e.g. "Framber Valdéz (2020–2024)|||framber valdez (2020-2024)"
 
 valid_players = lookup_table[
     lookup_table["key_mlbam"].notna() & (lookup_table["key_mlbam"] != "")
@@ -130,7 +130,7 @@ for _, row in valid_players.iterrows():
     year_str = f" ({first_year}–{last_year})" if first_year else ""
     display_label = f"{first} {last}{year_str}"
     norm_label = strip_accents(display_label).lower()
-    option = f"{display_label}{norm_label}"
+    option = f"{display_label}|||{norm_label}"
     if display_label not in named_id_mapping:
         player_options.append(option)
         named_id_mapping[display_label] = {
@@ -141,7 +141,7 @@ for _, row in valid_players.iterrows():
 
 def format_player_option(option):
     """Show only the accented display portion, hiding the normalized search suffix."""
-    return option.split("")[0]
+    return option.split("|||")[0]
 
 # Single selectbox: type to search (accent-insensitive), click to select
 selected_option = st.sidebar.selectbox(
