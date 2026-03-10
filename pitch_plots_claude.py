@@ -484,8 +484,9 @@ scatter_plot_2.add_shape(
     type="rect",
     x0=-0.83, x1=0.83,
     y0=1.5, y1=3.5,
-    line=dict(width=2),
-    color="White"
+    line=dict(
+        width=2,
+        color="White")
 )
 
 scatter_plot_2.update_xaxes(range=[2, -2])
