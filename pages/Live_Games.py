@@ -128,16 +128,18 @@ def extract_pitchers(feed: dict) -> dict:
             coords = pd_.get("coordinates", {})
             breaks = pd_.get("breaks", {})
 
-            pitch_type = ev.get("details", {}).get("type", {}).get("code", "XX")
-            velo       = pd_.get("startSpeed")
-            # breakHorizontal is from catcher's perspective — negate for pitcher POV
-            # breakVerticalInduced removes gravity component, matching Statcast pfx_z
-            raw_hbreak = breaks.get("breakHorizontal")
-            raw_vbreak = breaks.get("breakVerticalInduced") or breaks.get("breakVertical")
-            pfx_x = (-raw_hbreak) if raw_hbreak is not None else pd_.get("pfxX")
-            pfx_z = raw_vbreak    if raw_vbreak  is not None else pd_.get("pfxZ")
-            p_x        = coords.get("pX")
-            p_z        = coords.get("pZ")
+            pitch_type  = ev.get("details", {}).get("type", {}).get("code", "XX")
+            velo        = pd_.get("startSpeed")
+            # breakVerticalInduced removes gravity, matching Statcast pfx_z convention
+            raw_hbreak  = breaks.get("breakHorizontal")
+            raw_vbreak  = breaks.get("breakVerticalInduced") or breaks.get("breakVertical")
+            pfx_x       = raw_hbreak if raw_hbreak is not None else pd_.get("pfxX")
+            pfx_z       = raw_vbreak if raw_vbreak  is not None else pd_.get("pfxZ")
+            p_x         = coords.get("pX")
+            p_z         = coords.get("pZ")
+            # Release position for arm slot lines (x=horizontal, z=vertical at release)
+            rel_x       = coords.get("x0")
+            rel_z       = coords.get("z0")
             spin_rate  = breaks.get("spinRate")
             result     = ev.get("details", {}).get("description", "")
             balls      = ev.get("count", {}).get("balls", "?")
@@ -151,6 +153,8 @@ def extract_pitchers(feed: dict) -> dict:
                 "pfx_z":      round(pfx_z, 2) if pfx_z is not None else None,
                 "p_x":        round(p_x,   2) if p_x   is not None else None,
                 "p_z":        round(p_z,   2) if p_z   is not None else None,
+                "rel_x":      round(rel_x, 2) if rel_x is not None else None,
+                "rel_z":      round(rel_z, 2) if rel_z is not None else None,
                 "spin_rate":  round(spin_rate) if spin_rate is not None else None,
                 "result":     result,
                 "balls":      balls,
@@ -474,7 +478,18 @@ col_left, col_right = st.columns(2)
 with col_left:
     st.markdown("### Pitch Movement")
     if not plot_df.empty:
+        # Compute mean release position per pitch type for arm slot lines
+        release_df = (
+            plot_df.dropna(subset=["rel_x", "rel_z"])
+            .groupby("pitch_type")[["rel_x", "rel_z"]]
+            .mean()
+            .reset_index()
+        )
+        scale_factor = 5
+
         fig = go.Figure()
+
+        # Add scatter traces first
         for pt in plot_df["pitch_type"].unique():
             sub = plot_df[plot_df["pitch_type"] == pt]
             fig.add_trace(go.Scatter(
@@ -490,6 +505,25 @@ with col_left:
                     "Batter: %{customdata[2]}<extra></extra>"
                 ),
             ))
+
+        # Add arm slot lines
+        for _, row in release_df.iterrows():
+            pt    = row["pitch_type"]
+            x_val = row["rel_x"] * scale_factor
+            z_val = row["rel_z"] * scale_factor
+            fig.add_trace(go.Scatter(
+                x=[0, x_val], y=[0, z_val],
+                mode="lines",
+                line=dict(dash="dash", width=3, color=pitch_color(pt)),
+                name=f"{pt} Arm Slot",
+                showlegend=False,
+            ))
+
+        # Reorder: arm slot lines beneath scatter points
+        n_pitches = plot_df["pitch_type"].nunique()
+        reordered = list(fig.data[n_pitches:]) + list(fig.data[:n_pitches])
+        fig.data = reordered
+
         fig.add_hline(y=0, line_color="white", line_width=1)
         fig.add_vline(x=0, line_color="white", line_width=1)
         fig.update_xaxes(title="Horizontal Break (in)", range=[25, -25])
