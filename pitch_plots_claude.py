@@ -108,15 +108,14 @@ st.sidebar.header("🔍 Find Pitcher")
 import unicodedata
 
 def strip_accents(text):
-    """Strip diacritics so 'Pena' matches 'Peña', 'Valdez' matches 'Valdéz', etc."""
+    # Strip diacritics so 'Pena' matches 'Pena' and 'Valdez' matches 'Valdez'
     return unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode("ascii")
 
-# Build player options as "Display Name|||normalized_name" so that:
-#   - format_func shows only the accented display name in the UI
-#   - Streamlit's native selectbox search matches against the full raw string,
-#     which includes the accent-stripped suffix — giving us accent-folding for free.
-named_id_mapping = {}
-player_options = []  # e.g. "Framber Valdéz (2020–2024)|||framber valdez (2020-2024)"
+# The selectbox search matches against the option values directly.
+# Strategy: use the accent-stripped name as the option key (what gets searched),
+# and store the pretty accented name in a dict for display and lookups.
+named_id_mapping = {}   # norm_label -> {mlbam, fangraphs, display_name, pretty_label}
+player_options = []     # list of accent-stripped labels (used as selectbox values)
 
 valid_players = lookup_table[
     lookup_table["key_mlbam"].notna() & (lookup_table["key_mlbam"] != "")
@@ -128,41 +127,38 @@ for _, row in valid_players.iterrows():
     first_year = int(row["mlb_played_first"]) if pd.notna(row.get("mlb_played_first")) else None
     last_year = int(row["mlb_played_last"]) if pd.notna(row.get("mlb_played_last")) else None
     year_str = f" ({first_year}–{last_year})" if first_year else ""
-    display_label = f"{first} {last}{year_str}"
-    norm_label = strip_accents(display_label).lower()
-    option = f"{display_label}|||{norm_label}"
-    if display_label not in named_id_mapping:
-        player_options.append(option)
-        named_id_mapping[display_label] = {
+    display_label = f"{first} {last}{year_str}"  # e.g. "Framber Valdéz (2020–2024)"
+    norm_label = strip_accents(display_label)     # e.g. "Framber Valdez (2020-2024)"
+    if norm_label not in named_id_mapping:
+        player_options.append(norm_label)
+        named_id_mapping[norm_label] = {
             "mlbam": row["key_mlbam"],
             "fangraphs": row["key_fangraphs"],
             "display_name": f"{first} {last}",
+            "pretty_label": display_label,
         }
 
-def format_player_option(option):
-    """Show only the accented display portion, hiding the normalized search suffix."""
-    return option.split("|||")[0]
-
-# Single selectbox: type to search (accent-insensitive), click to select
-selected_option = st.sidebar.selectbox(
+# Selectbox searches the norm_label values (accent-free), so typing
+# "Pena" will surface "Pena" which maps back to "Peña" for display.
+selected_norm = st.sidebar.selectbox(
     "Search & select pitcher",
     options=player_options,
     index=None,
-    format_func=format_player_option,
+    format_func=lambda norm: named_id_mapping[norm]["pretty_label"],
     placeholder="Type a name to search…",
     help="Accents handled automatically — 'Pena' finds 'Peña', 'Valdez' finds 'Valdéz'"
 )
 
-if selected_option is None:
+if selected_norm is None:
     st.sidebar.info("Type a name above to find a pitcher.")
     st.info("👈 Use the sidebar to search for a pitcher to get started.")
     st.stop()
 
-selected_label = format_player_option(selected_option)
+selected_label = named_id_mapping[selected_norm]["pretty_label"]
 
-playerid = named_id_mapping[selected_label]["mlbam"]
-fangraphs_id = named_id_mapping[selected_label]["fangraphs"]
-selected_player_name = named_id_mapping[selected_label]["display_name"]
+playerid = named_id_mapping[selected_norm]["mlbam"]
+fangraphs_id = named_id_mapping[selected_norm]["fangraphs"]
+selected_player_name = named_id_mapping[selected_norm]["display_name"]
 
 # ----------------------------
 # Season / Year Selection — only seasons with Statcast data for this pitcher
