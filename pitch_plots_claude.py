@@ -221,7 +221,7 @@ season = st.sidebar.selectbox("Select Season", options=available_years, index=0)
 fg_stats = get_season_stats(season)
 
 if not fg_stats.empty:
-    player_row = fg_stats[fg_stats["Name"].str.lower() == selected_player_name.lower()]
+    player_row = fg_stats[fg_stats["Name"].apply(lambda n: strip_accents(n).lower()) == strip_accents(selected_player_name).lower()]
 else:
     player_row = pd.DataFrame()
 
