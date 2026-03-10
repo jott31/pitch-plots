@@ -46,15 +46,16 @@ def pitch_color(code):
 # ----------------------------
 # API helpers
 # ----------------------------
-@st.cache_data(ttl=30)   # short TTL so live data stays fresh
-def fetch_today_games(game_type: str) -> list:
+def get_et_today():
     try:
         from zoneinfo import ZoneInfo
-        date_str = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+        return datetime.now(ZoneInfo("America/New_York")).date()
     except ImportError:
-        # fallback: subtract 5 hours from UTC as approximation of ET
         from datetime import timedelta
-        date_str = (datetime.now(timezone.utc) - timedelta(hours=5)).strftime("%Y-%m-%d")
+        return (datetime.now(timezone.utc) - timedelta(hours=5)).date()
+
+@st.cache_data(ttl=30)   # short TTL so live data stays fresh for today
+def fetch_games(date_str: str, game_type: str) -> list:
     url = (
         f"{BASE}/schedule?sportId=1"
         f"&date={date_str}"
@@ -203,6 +204,15 @@ st.title("⚾ Live Games")
 # Sidebar controls
 st.sidebar.header("Game Settings")
 
+et_today = get_et_today()
+
+selected_date = st.sidebar.date_input(
+    "Date",
+    value=et_today,
+    max_value=et_today,
+    min_value=et_today.replace(year=2008),
+)
+
 game_type = st.sidebar.radio(
     "Game Type",
     options=["R", "S"],
@@ -210,29 +220,28 @@ game_type = st.sidebar.radio(
     horizontal=True,
 )
 
-if st.sidebar.button("↻ Refresh Games"):
+if st.sidebar.button("↻ Refresh"):
     st.cache_data.clear()
 
 # ----------------------------
-# Load today's games
+# Load games for selected date
 # ----------------------------
+date_str = selected_date.strftime("%Y-%m-%d")
+is_today = (selected_date == et_today)
+
 try:
-    with st.spinner("Loading today's games..."):
-        games = fetch_today_games(game_type)
+    with st.spinner("Loading games..."):
+        games = fetch_games(date_str, game_type)
 except Exception as e:
     st.error(f"Could not load games: {e}")
     st.stop()
 
-try:
-    from zoneinfo import ZoneInfo
-    today_str = datetime.now(ZoneInfo("America/New_York")).strftime("%A, %B %-d, %Y")
-except ImportError:
-    today_str = datetime.now().strftime("%A, %B %-d, %Y")
-st.caption(f"Games for {today_str} {'(Spring Training)' if game_type == 'S' else ''}")
+date_label = selected_date.strftime("%A, %B %-d, %Y")
+st.caption(f"{'Today — ' if is_today else ''}{date_label} {'(Spring Training)' if game_type == 'S' else ''}")
 
 if not games:
     label = "Spring Training" if game_type == "S" else "Regular Season"
-    st.info(f"No {label} games scheduled today. Try switching game type in the sidebar.")
+    st.info(f"No {label} games found for {date_label}. Try a different date or game type.")
     st.stop()
 
 # ----------------------------
