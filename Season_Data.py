@@ -5,6 +5,8 @@ import plotly.graph_objects as go
 from pybaseball import statcast_pitcher, playerid_lookup, pitching_stats, schedule_and_record
 from pybaseball.playerid_lookup import get_lookup_table
 
+st.set_page_config(page_title="Pitch Analysis", page_icon="⚾", layout="wide")
+
 # ----------------------------
 # Pitch Type Mapping
 # ----------------------------
@@ -137,9 +139,12 @@ for _, row in valid_players.iterrows():
 # Two widgets, one UX: a text input that filters the selectbox below it.
 # The text input does accent-folding; the selectbox shows only matched results.
 # Hiding the selectbox label makes them read as a single search control.
+# Pre-fill from ?player= query param (e.g. when linking from Live Games page)
+_param_player = st.query_params.get("player", "")
+
 search_query = st.sidebar.text_input(
     "Search pitcher",
-    value="",
+    value=_param_player,
     placeholder="Type a name… e.g. Pena, Valdez",
     label_visibility="collapsed",
 )
@@ -484,9 +489,7 @@ scatter_plot_2.add_shape(
     type="rect",
     x0=-0.83, x1=0.83,
     y0=1.5, y1=3.5,
-    line=dict(
-        width=2,
-        color="White")
+    line=dict(width=2)
 )
 
 scatter_plot_2.update_xaxes(range=[2, -2])
