@@ -414,11 +414,8 @@ box = feed.get("liveData", {}).get("boxscore", {}).get("teams", {})
 away_pitcher_ids = box.get("away", {}).get("pitchers", [])
 home_pitcher_ids = box.get("home", {}).get("pitchers", [])
 
-col1, col2 = st.columns(2)
-with col1:
-    show_team_section(away_abbr, away.get("name", away_abbr), away_pitcher_ids)
-with col2:
-    show_team_section(home_abbr, home.get("name", home_abbr), home_pitcher_ids)
+show_team_section(away_abbr, away.get("name", away_abbr), away_pitcher_ids)
+show_team_section(home_abbr, home.get("name", home_abbr), home_pitcher_ids)
 
 st.markdown("---")
 
