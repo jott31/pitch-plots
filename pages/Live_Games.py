@@ -323,22 +323,45 @@ if not pitchers_with_pitches:
 # ----------------------------
 # Team pitching summary tables
 # ----------------------------
-def build_summary_df(pitcher_list):
-    rows = []
+def player_link(name):
+    """Return an HTML anchor linking to the season stats page pre-filled with the player name."""
+    from urllib.parse import quote
+    encoded = quote(name)
+    return f'<a href="/Pitch_Plots?player={encoded}" target="_self">{name}</a>'
+
+def fmt(val, suffix=""):
+    return f"{val}{suffix}" if val is not None else "—"
+
+def build_and_render_team_section(team_abbr, team_name, pitcher_list):
+    if not pitcher_list:
+        return
+
+    pitcher_list.sort(key=lambda p: -len(p["pitches"]))
+
+    swing_results  = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul", "Foul Tip",
+                      "In play, out(s)", "In play, no out", "In play, runs"}
+    whiff_results  = {"Swinging Strike", "Swinging Strike (Blocked)"}
+    strike_results = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
+                      "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
+
+    headers = ["Pitcher", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
+    header_row = "".join(f"<th>{h}</th>" for h in headers)
+
+    rows_html = ""
     for p in pitcher_list:
         pitches  = p["pitches"]
         total    = len(pitches)
         velos    = [x["velo"] for x in pitches if x["velo"] is not None]
-        avg_velo = round(sum(velos) / len(velos), 1) if velos else None
-        max_velo = round(max(velos), 1) if velos else None
+        avg_velo = fmt(round(sum(velos)/len(velos), 1), " mph") if velos else "—"
+        max_velo = fmt(round(max(velos), 1), " mph") if velos else "—"
+        whiffs   = sum(1 for x in pitches if x["result"] in whiff_results)
+        strikes  = sum(1 for x in pitches if (x["result"] or "") in strike_results)
+        balls    = sum(1 for x in pitches if (x["result"] or "").lower().startswith("ball"))
+        in_zone  = sum(1 for x in pitches
+                       if x.get("p_z") is not None and 1.5 <= x["p_z"] <= 3.5
+                       and x.get("p_x") is not None and -0.83 <= x["p_x"] <= 0.83)
+        in_zone_pct = fmt(round(in_zone / total * 100, 1), "%") if total else "—"
 
-        swing_results = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
-        whiff_results = {"Swinging Strike", "Swinging Strike (Blocked)"}
-        swings = sum(1 for x in pitches if x["result"] in swing_results)
-        whiffs = sum(1 for x in pitches if x["result"] in whiff_results)
-        balls  = sum(1 for x in pitches if (x["result"] or "").lower().startswith("ball"))
-
-        # Arsenal summary
         type_counts = {}
         for x in pitches:
             type_counts[x["pitch_type"]] = type_counts.get(x["pitch_type"], 0) + 1
@@ -347,26 +370,37 @@ def build_summary_df(pitcher_list):
             for pt, cnt in sorted(type_counts.items(), key=lambda i: -i[1])[:5]
         )
 
-        strike_results = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
-                          "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
-        strikes = sum(1 for x in pitches if (x["result"] or "") in strike_results)
-        in_zone = sum(1 for x in pitches if isinstance(x.get("balls"), int)
-                      and x.get("p_z") is not None
-                      and 1.5 <= x["p_z"] <= 3.5
-                      and x.get("p_x") is not None
-                      and -0.83 <= x["p_x"] <= 0.83)
-        rows.append({
-            "Pitcher":   p["name"],
-            "Pitches":   total,
-            "Avg Velo":  avg_velo,
-            "Max Velo":  max_velo,
-            "Whiffs":    whiffs,
-            "Strikes":   strikes,
-            "Balls":     balls,
-            "InZone%":   round(in_zone / total * 100, 1) if total else None,
-            "Arsenal":   arsenal,
-        })
-    return pd.DataFrame(rows)
+        cells = [
+            player_link(p["name"]),
+            total, avg_velo, max_velo, whiffs, strikes, balls, in_zone_pct, arsenal
+        ]
+        rows_html += "<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
+
+    table_html = f"""
+    <style>
+      .summary-table {{
+        width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;
+      }}
+      .summary-table th {{
+        text-align: left; padding: 6px 10px; border-bottom: 2px solid #444;
+        font-family: monospace; font-size: 11px; color: #aaa; text-transform: uppercase;
+      }}
+      .summary-table td {{
+        padding: 6px 10px; border-bottom: 1px solid #2a2a2a;
+      }}
+      .summary-table a {{
+        color: #c8f135; text-decoration: none; font-weight: 500;
+      }}
+      .summary-table a:hover {{ text-decoration: underline; }}
+      .summary-table tr:hover td {{ background: rgba(200,241,53,0.04); }}
+    </style>
+    <table class="summary-table">
+      <thead><tr>{header_row}</tr></thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+    """
+    st.markdown(f"#### {team_abbr} — {team_name} Pitching")
+    st.markdown(table_html, unsafe_allow_html=True)
 
 def show_team_section(team_abbr, team_name, pitcher_ids):
     team_pitchers = [
@@ -374,23 +408,7 @@ def show_team_section(team_abbr, team_name, pitcher_ids):
         for pid in pitcher_ids
         if pid in pitchers_with_pitches
     ]
-    if not team_pitchers:
-        return
-
-    team_pitchers.sort(key=lambda p: -len(p["pitches"]))
-
-    st.markdown(f"#### {team_abbr} — {team_name} Pitching")
-    summary_df = build_summary_df(team_pitchers)
-    st.dataframe(
-        summary_df,
-        column_config={
-            "Avg Velo": st.column_config.NumberColumn(format="%.1f mph"),
-            "Max Velo": st.column_config.NumberColumn(format="%.1f mph"),
-            "InZone%":  st.column_config.NumberColumn(format="%.1f%%"),
-        },
-        use_container_width=True,
-        hide_index=True,
-    )
+    build_and_render_team_section(team_abbr, team_name, team_pitchers)
 
 box = feed.get("liveData", {}).get("boxscore", {}).get("teams", {})
 away_pitcher_ids = box.get("away", {}).get("pitchers", [])
