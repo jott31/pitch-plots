@@ -213,12 +213,16 @@ selected_date = st.sidebar.date_input(
     min_value=et_today.replace(year=2008),
 )
 
-game_type = st.sidebar.radio(
-    "Game Type",
-    options=["R", "S"],
-    format_func=lambda x: "Regular Season" if x == "R" else "Spring Training",
-    horizontal=True,
-)
+GAME_TYPE_LABELS = {
+    "R": "Regular Season",
+    "S": "Spring Training",
+    "F": "Wild Card",
+    "D": "Division Series",
+    "L": "League Championship",
+    "W": "World Series",
+}
+# Request all game types at once — no user selection needed
+game_type = "R,S,F,D,L,W"
 
 if st.sidebar.button("↻ Refresh"):
     st.cache_data.clear()
@@ -237,11 +241,10 @@ except Exception as e:
     st.stop()
 
 date_label = selected_date.strftime("%A, %B %-d, %Y")
-st.caption(f"{'Today — ' if is_today else ''}{date_label} {'(Spring Training)' if game_type == 'S' else ''}")
+st.caption(f"{'Today — ' if is_today else ''}{date_label}")
 
 if not games:
-    label = "Spring Training" if game_type == "S" else "Regular Season"
-    st.info(f"No {label} games found for {date_label}. Try a different date or game type.")
+    st.info(f"No games found for {date_label}. Try a different date.")
     st.stop()
 
 # ----------------------------
