@@ -409,29 +409,32 @@ for p in pitcher_list:
     ]
     rows_html += "<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
 
-table_html = f"""
+css = """
 <style>
-  .summary-table {{
+  .summary-table {
     width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;
-  }}
-  .summary-table th {{
+  }
+  .summary-table th {
     text-align: left; padding: 6px 10px; border-bottom: 2px solid #444;
     font-family: monospace; font-size: 11px; color: #aaa; text-transform: uppercase;
-  }}
-  .summary-table td {{
+  }
+  .summary-table td {
     padding: 6px 10px; border-bottom: 1px solid #2a2a2a;
-  }}
-  .summary-table a {{
+  }
+  .summary-table a {
     color: #c8f135; text-decoration: none; font-weight: 500;
-  }}
-  .summary-table a:hover {{ text-decoration: underline; }}
-  .summary-table tr:hover td {{ background: rgba(200,241,53,0.04); }}
+  }
+  .summary-table a:hover { text-decoration: underline; }
+  .summary-table tr:hover td { background: rgba(200,241,53,0.04); }
 </style>
-<table class="summary-table">
-  <thead><tr>{header_row}</tr></thead>
-  <tbody>{rows_html}</tbody>
-</table>
 """
+table_html = (
+    css
+    + "<table class=\"summary-table\">"
+    + "<thead><tr>" + header_row + "</tr></thead>"
+    + "<tbody>" + rows_html + "</tbody>"
+    + "</table>"
+)
 st.markdown(f"#### {team_abbr} — {team_name} Pitching")
 st.markdown(table_html, unsafe_allow_html=True)
 ```
