@@ -359,7 +359,8 @@ def player_link(name):
 “”“Return an HTML anchor linking to the season stats page pre-filled with the player name.”””
 from urllib.parse import quote
 encoded = quote(name)
-return f’<a href="/Pitch_Plots?player={encoded}" target="_self">{name}</a>’
+url = “/Pitch_Plots?player=” + encoded
+return ‘<a href="' + url + '" target="_self">’ + name + ‘</a>’
 
 def fmt(val, suffix=””):
 return f”{val}{suffix}” if val is not None else “—”
