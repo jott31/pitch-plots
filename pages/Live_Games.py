@@ -506,8 +506,8 @@ df = df[df["pitch_type"].isin(selected_types)]
 # ----------------------------
 total   = len(df)
 velos   = df["velo"].dropna()
-avg_v   = f"{velos.mean():.1f} mph" if len(velos) else "—"
-max_v   = f"{velos.max():.1f} mph"  if len(velos) else "—"
+avg_v   = f"{velos.mean():.1f}" if len(velos) else "—"
+max_v   = f"{velos.max():.1f}"  if len(velos) else "—"
 
 swing_r  = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul", "Foul Tip",
             "In play, out(s)", "In play, no out", "In play, runs"}
@@ -524,8 +524,8 @@ in_zone_pct = f"{in_zone/total*100:.1f}%" if total else "—"
 
 m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
 m1.metric("Pitches", total)
-m2.metric("Avg Velo", avg_v)
-m3.metric("Max Velo", max_v)
+m2.metric("Avg Velo (mph)", avg_v)
+m3.metric("Max Velo (mph)", max_v)
 m4.metric("Whiffs", whiffs)
 m5.metric("Strikes", strikes)
 m6.metric("Balls", balls)
