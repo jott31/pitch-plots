@@ -81,10 +81,14 @@ def fetch_live_feed(game_pk: int) -> dict:
 # ----------------------------
 # Data extraction
 # ----------------------------
+def abs_outs(inning, outs):
+    """Convert inning + outs-in-inning to absolute out count from start of game."""
+    return (int(inning) - 1) * 3 + int(outs)
+
 def extract_pitchers(feed: dict) -> dict:
     """
     Extract all pitchers and their pitches from a live game feed.
-    Returns dict: pitcher_id -> {name, team, pitches[]}
+    Returns dict: pitcher_id -> {name, team, pitches[], ip}
     """
     away_abbr = feed.get("gameData", {}).get("teams", {}).get("away", {}).get("abbreviation", "?")
     home_abbr = feed.get("gameData", {}).get("teams", {}).get("home", {}).get("abbreviation", "?")
@@ -96,7 +100,8 @@ def extract_pitchers(feed: dict) -> dict:
     pitcher_map = {}
     all_plays = feed.get("liveData", {}).get("plays", {}).get("allPlays", [])
 
-    for play in all_plays:
+    # First pass: collect pitches and track first/last play index per pitcher
+    for i, play in enumerate(all_plays):
         pitcher = play.get("matchup", {}).get("pitcher")
         if not pitcher:
             continue
@@ -111,44 +116,39 @@ def extract_pitchers(feed: dict) -> dict:
             else:
                 half = play.get("about", {}).get("halfInning", "")
                 team = home_abbr if half == "top" else away_abbr
-            pitcher_map[pid] = {"id": pid, "name": pname, "team": team, "pitches": []}
+            pitcher_map[pid] = {
+                "id": pid, "name": pname, "team": team, "pitches": [],
+                "first_play_idx": i, "last_play_idx": i,
+            }
+        else:
+            pitcher_map[pid]["last_play_idx"] = i
 
-        batter   = play.get("matchup", {}).get("batter", {}).get("fullName", "")
-        bat_side = play.get("matchup", {}).get("batSide", {}).get("code", "?")
-        inning   = play.get("about", {}).get("inning", "?")
-        half     = "Top" if play.get("about", {}).get("halfInning") == "top" else "Bot"
-        outs     = play.get("about", {}).get("startOuts", play.get("count", {}).get("outs", 0))
-        # outs after this play = outs on the last playEvent's count
-        last_event_outs = outs
-        for ev in play.get("playEvents", []):
-            ev_outs = ev.get("count", {}).get("outs")
-            if ev_outs is not None:
-                last_event_outs = ev_outs
-        outs_after = last_event_outs
-        away_sc  = play.get("result", {}).get("awayScore", "?")
-        home_sc  = play.get("result", {}).get("homeScore", "?")
+        batter    = play.get("matchup", {}).get("batter", {}).get("fullName", "")
+        bat_side  = play.get("matchup", {}).get("batSide", {}).get("code", "?")
+        inning    = play.get("about", {}).get("inning", 1)
+        half      = "Top" if play.get("about", {}).get("halfInning") == "top" else "Bot"
+        outs      = play.get("about", {}).get("startOuts", 0)
+        away_sc   = play.get("result", {}).get("awayScore", "?")
+        home_sc   = play.get("result", {}).get("homeScore", "?")
         scoreline = f"{away_abbr} {away_sc} - {home_sc} {home_abbr}"
 
         for ev in play.get("playEvents", []):
             if not ev.get("isPitch"):
                 continue
-            pd_  = ev.get("pitchData") or {}
+            pd_    = ev.get("pitchData") or {}
             coords = pd_.get("coordinates", {})
             breaks = pd_.get("breaks", {})
 
-            pitch_type  = ev.get("details", {}).get("type", {}).get("code", "XX")
-            velo        = pd_.get("startSpeed")
-            # breakHorizontal is from catcher's perspective — negate for pitcher POV
-            # breakVerticalInduced removes gravity, matching Statcast pfx_z convention
-            raw_hbreak  = breaks.get("breakHorizontal")
-            raw_vbreak  = breaks.get("breakVerticalInduced") or breaks.get("breakVertical")
-            pfx_x       = (-raw_hbreak) if raw_hbreak is not None else pd_.get("pfxX")
-            pfx_z       = raw_vbreak    if raw_vbreak  is not None else pd_.get("pfxZ")
-            p_x         = coords.get("pX")
-            p_z         = coords.get("pZ")
-            # Release position for arm slot lines (x=horizontal, z=vertical at release)
-            rel_x       = coords.get("x0")
-            rel_z       = coords.get("z0")
+            pitch_type = ev.get("details", {}).get("type", {}).get("code", "XX")
+            velo       = pd_.get("startSpeed")
+            raw_hbreak = breaks.get("breakHorizontal")
+            raw_vbreak = breaks.get("breakVerticalInduced") or breaks.get("breakVertical")
+            pfx_x      = (-raw_hbreak) if raw_hbreak is not None else pd_.get("pfxX")
+            pfx_z      = raw_vbreak    if raw_vbreak  is not None else pd_.get("pfxZ")
+            p_x        = coords.get("pX")
+            p_z        = coords.get("pZ")
+            rel_x      = coords.get("x0")
+            rel_z      = coords.get("z0")
             spin_rate  = breaks.get("spinRate")
             result     = ev.get("details", {}).get("description", "")
             balls      = ev.get("count", {}).get("balls", "?")
@@ -173,9 +173,38 @@ def extract_pitchers(feed: dict) -> dict:
                 "inning":     inning,
                 "half":       half,
                 "outs":       outs,
-                "outs_after": outs_after,
                 "scoreline":  scoreline,
             })
+
+    # Second pass: compute IP per pitcher using next play's startOuts as true exit outs
+    for pid, p in pitcher_map.items():
+        first_play = all_plays[p["first_play_idx"]]
+        last_idx   = p["last_play_idx"]
+
+        entry_inning = first_play.get("about", {}).get("inning", 1)
+        entry_outs   = first_play.get("about", {}).get("startOuts", 0)
+
+        if last_idx + 1 < len(all_plays):
+            # Exit state = start of the very next play
+            next_play   = all_plays[last_idx + 1]
+            exit_inning = next_play.get("about", {}).get("inning", 1)
+            exit_outs   = next_play.get("about", {}).get("startOuts", 0)
+        else:
+            # Pitcher faced the last batter of the game — use end-of-game inning/outs
+            last_play   = all_plays[last_idx]
+            exit_inning = last_play.get("about", {}).get("inning", 1)
+            # Count outs from playEvents on last play
+            exit_outs   = last_play.get("about", {}).get("startOuts", 0)
+            for ev in last_play.get("playEvents", []):
+                ev_outs = ev.get("count", {}).get("outs")
+                if ev_outs is not None:
+                    exit_outs = ev_outs
+
+        total_outs = abs_outs(exit_inning, exit_outs) - abs_outs(entry_inning, entry_outs)
+        total_outs = max(total_outs, 0)
+        whole  = total_outs // 3
+        thirds = total_outs  % 3
+        p["ip"] = f"{whole}.{thirds}" if thirds else str(whole)
 
     return pitcher_map
 
@@ -355,37 +384,6 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list):
     strike_results = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
                       "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
 
-    out_results = {
-        "In play, out(s)", "Strikeout", "Strikeout - DP",
-        "Grounded Into DP", "Double Play", "Triple Play",
-        "Fielders Choice Out", "Bunt Groundout", "Bunt Pop Out",
-        "Pop Out", "Flyout", "Groundout", "Lineout", "Forceout",
-        "Sacrifice Fly", "Sacrifice Bunt", "Sac Fly DP",
-    }
-
-    def calc_ip(pitches):
-        # Use outs_after (end of at-bat) for last pitch, outs (start) for first pitch
-        states = []
-        for x in pitches:
-            try:
-                ing        = int(x.get("inning")     or 0)
-                outs_pre   = int(x.get("outs")       or 0)
-                outs_post  = int(x.get("outs_after") or outs_pre)
-                if ing > 0:
-                    states.append((ing, outs_pre, outs_post))
-            except (TypeError, ValueError):
-                pass
-        if not states:
-            return "0"
-        first = min(states, key=lambda s: (s[0], s[1]))
-        last  = max(states, key=lambda s: (s[0], s[2]))
-        outs_at_entry = (first[0] - 1) * 3 + first[1]   # outs before pitcher's first pitch
-        outs_at_exit  = (last[0]  - 1) * 3 + last[2]    # outs after pitcher's last play
-        total_outs = outs_at_exit - outs_at_entry
-        whole  = total_outs // 3
-        thirds = total_outs  % 3
-        return f"{whole}.{thirds}" if thirds else str(whole)
-
     headers = ["Pitcher", "IP", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
     header_row = "".join(f"<th>{h}</th>" for h in headers)
 
@@ -412,11 +410,9 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list):
             for pt, cnt in sorted(type_counts.items(), key=lambda i: -i[1])[:5]
         )
 
-        ip = calc_ip(pitches)
-
         cells = [
             player_link(p["name"]),
-            ip, total, avg_velo, max_velo, whiffs, strikes, balls, in_zone_pct, arsenal
+            p.get("ip", "—"), total, avg_velo, max_velo, whiffs, strikes, balls, in_zone_pct, arsenal
         ]
         rows_html += "<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
 
