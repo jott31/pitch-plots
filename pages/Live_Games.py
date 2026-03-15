@@ -347,26 +347,34 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list):
     strike_results = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
                       "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
 
+    out_results = {
+        "In play, out(s)", "Strikeout", "Strikeout - DP",
+        "Grounded Into DP", "Double Play", "Triple Play",
+        "Fielders Choice Out", "Bunt Groundout", "Bunt Pop Out",
+        "Pop Out", "Flyout", "Groundout", "Lineout", "Forceout",
+        "Sacrifice Fly", "Sacrifice Bunt", "Sac Fly DP",
+    }
+
     def calc_ip(pitches):
-        # Outs recorded = outs at end of last pitch minus outs at start of first pitch
-        # This works for both starters and relievers
+        # outs field = outs before the pitch; add 1 if the final pitch resulted in an out
         states = []
         for x in pitches:
             try:
                 ing  = int(x.get("inning") or 0)
                 outs = int(x.get("outs")   or 0)
                 if ing > 0:
-                    states.append((ing, outs))
+                    states.append((ing, outs, x.get("result", "")))
             except (TypeError, ValueError):
                 pass
         if not states:
             return "0"
-        first_ing, first_outs = min(states)
-        last_ing,  last_outs  = max(states)
-        # Outs at entry = (first_ing - 1) * 3 + first_outs (outs already recorded before pitcher entered)
-        # Outs at exit  = (last_ing  - 1) * 3 + last_outs
+        first_ing, first_outs, _ = min(states, key=lambda s: (s[0], s[1]))
+        last_ing,  last_outs, last_result = max(states, key=lambda s: (s[0], s[1]))
         outs_at_entry = (first_ing - 1) * 3 + first_outs
         outs_at_exit  = (last_ing  - 1) * 3 + last_outs
+        # Add 1 if the last pitch recorded an out (outs field only updates on next pitch)
+        if last_result in out_results or "out" in (last_result or "").lower():
+            outs_at_exit += 1
         total_outs = outs_at_exit - outs_at_entry
         whole  = total_outs // 3
         thirds = total_outs  % 3
