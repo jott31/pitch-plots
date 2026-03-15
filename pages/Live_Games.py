@@ -176,44 +176,36 @@ def extract_pitchers(feed: dict) -> dict:
                 "scoreline":  scoreline,
             })
 
-    def get_play_outs(play):
-        """Outs at START of play — tries multiple field names."""
-        about = play.get("about", {})
-        for field in ("startOuts", "outs"):
-            val = about.get(field)
-            if val is not None:
-                return int(val)
-        for ev in play.get("playEvents", []):
-            val = ev.get("count", {}).get("outs")
-            if val is not None:
-                return int(val)
-        return 0
-
-    def get_play_end_outs(play):
-        """Outs at END of play — last outs value seen in playEvents."""
+    def end_outs(play):
+        """Outs at END of a play = last outs value in playEvents, else about.outs."""
         last = None
         for ev in play.get("playEvents", []):
             val = ev.get("count", {}).get("outs")
             if val is not None:
                 last = int(val)
-        return last if last is not None else get_play_outs(play)
+        if last is not None:
+            return last
+        return int(play.get("about", {}).get("outs", 0))
 
-    # Second pass: compute IP per pitcher using next play's start outs as true exit outs
+    # Second pass: compute IP per pitcher
+    # entry outs = end_outs of play immediately before pitcher's first play (0 if none)
+    # exit outs  = end_outs of pitcher's last play
     for pid, p in pitcher_map.items():
-        first_play = all_plays[p["first_play_idx"]]
+        first_idx  = p["first_play_idx"]
         last_idx   = p["last_play_idx"]
+        first_play = all_plays[first_idx]
         last_play  = all_plays[last_idx]
 
         entry_inning = int(first_play.get("about", {}).get("inning", 1))
-        entry_outs   = get_play_outs(first_play)
-
-        if last_idx + 1 < len(all_plays):
-            next_play   = all_plays[last_idx + 1]
-            exit_inning = int(next_play.get("about", {}).get("inning", 1))
-            exit_outs   = get_play_outs(next_play)
+        if first_idx > 0:
+            prev_play    = all_plays[first_idx - 1]
+            entry_inning = int(prev_play.get("about", {}).get("inning", entry_inning))
+            entry_outs   = end_outs(prev_play)
         else:
-            exit_inning = int(last_play.get("about", {}).get("inning", 1))
-            exit_outs   = get_play_end_outs(last_play)
+            entry_outs   = 0  # started from the very first play of the game
+
+        exit_inning = int(last_play.get("about", {}).get("inning", 1))
+        exit_outs   = end_outs(last_play)
 
         total_outs = abs_outs(exit_inning, exit_outs) - abs_outs(entry_inning, entry_outs)
         total_outs = max(total_outs, 0)
