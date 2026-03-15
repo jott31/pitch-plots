@@ -117,7 +117,14 @@ def extract_pitchers(feed: dict) -> dict:
         bat_side = play.get("matchup", {}).get("batSide", {}).get("code", "?")
         inning   = play.get("about", {}).get("inning", "?")
         half     = "Top" if play.get("about", {}).get("halfInning") == "top" else "Bot"
-        outs     = play.get("count", {}).get("outs", 0)
+        outs     = play.get("about", {}).get("startOuts", play.get("count", {}).get("outs", 0))
+        # outs after this play = outs on the last playEvent's count
+        last_event_outs = outs
+        for ev in play.get("playEvents", []):
+            ev_outs = ev.get("count", {}).get("outs")
+            if ev_outs is not None:
+                last_event_outs = ev_outs
+        outs_after = last_event_outs
         away_sc  = play.get("result", {}).get("awayScore", "?")
         home_sc  = play.get("result", {}).get("homeScore", "?")
         scoreline = f"{away_abbr} {away_sc} - {home_sc} {home_abbr}"
@@ -166,6 +173,7 @@ def extract_pitchers(feed: dict) -> dict:
                 "inning":     inning,
                 "half":       half,
                 "outs":       outs,
+                "outs_after": outs_after,
                 "scoreline":  scoreline,
             })
 
@@ -356,25 +364,23 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list):
     }
 
     def calc_ip(pitches):
-        # outs field = outs before the pitch; add 1 if the final pitch resulted in an out
+        # Use outs_after (end of at-bat) for last pitch, outs (start) for first pitch
         states = []
         for x in pitches:
             try:
-                ing  = int(x.get("inning") or 0)
-                outs = int(x.get("outs")   or 0)
+                ing        = int(x.get("inning")     or 0)
+                outs_pre   = int(x.get("outs")       or 0)
+                outs_post  = int(x.get("outs_after") or outs_pre)
                 if ing > 0:
-                    states.append((ing, outs, x.get("result", "")))
+                    states.append((ing, outs_pre, outs_post))
             except (TypeError, ValueError):
                 pass
         if not states:
             return "0"
-        first_ing, first_outs, _ = min(states, key=lambda s: (s[0], s[1]))
-        last_ing,  last_outs, last_result = max(states, key=lambda s: (s[0], s[1]))
-        outs_at_entry = (first_ing - 1) * 3 + first_outs
-        outs_at_exit  = (last_ing  - 1) * 3 + last_outs
-        # Add 1 if the last pitch recorded an out (outs field only updates on next pitch)
-        if last_result in out_results or "out" in (last_result or "").lower():
-            outs_at_exit += 1
+        first = min(states, key=lambda s: (s[0], s[1]))
+        last  = max(states, key=lambda s: (s[0], s[2]))
+        outs_at_entry = (first[0] - 1) * 3 + first[1]   # outs before pitcher's first pitch
+        outs_at_exit  = (last[0]  - 1) * 3 + last[2]    # outs after pitcher's last play
         total_outs = outs_at_exit - outs_at_entry
         whole  = total_outs // 3
         thirds = total_outs  % 3
