@@ -348,18 +348,26 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list):
                       "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
 
     def calc_ip(pitches):
-        # Find the maximum (inning, outs) reached — outs recorded = (inning-1)*3 + max_outs_in_that_inning
-        # We only count top/bottom half matching the pitcher's role, so just use raw inning number
-        best = (0, 0)
+        # Outs recorded = outs at end of last pitch minus outs at start of first pitch
+        # This works for both starters and relievers
+        states = []
         for x in pitches:
             try:
                 ing  = int(x.get("inning") or 0)
                 outs = int(x.get("outs")   or 0)
-                if (ing, outs) > best:
-                    best = (ing, outs)
+                if ing > 0:
+                    states.append((ing, outs))
             except (TypeError, ValueError):
                 pass
-        total_outs = (best[0] - 1) * 3 + best[1] if best[0] > 0 else 0
+        if not states:
+            return "0"
+        first_ing, first_outs = min(states)
+        last_ing,  last_outs  = max(states)
+        # Outs at entry = (first_ing - 1) * 3 + first_outs (outs already recorded before pitcher entered)
+        # Outs at exit  = (last_ing  - 1) * 3 + last_outs
+        outs_at_entry = (first_ing - 1) * 3 + first_outs
+        outs_at_exit  = (last_ing  - 1) * 3 + last_outs
+        total_outs = outs_at_exit - outs_at_entry
         whole  = total_outs // 3
         thirds = total_outs  % 3
         return f"{whole}.{thirds}" if thirds else str(whole)
