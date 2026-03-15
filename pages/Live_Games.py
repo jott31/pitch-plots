@@ -176,29 +176,44 @@ def extract_pitchers(feed: dict) -> dict:
                 "scoreline":  scoreline,
             })
 
-    # Second pass: compute IP per pitcher using next play's startOuts as true exit outs
+    def get_play_outs(play):
+        """Outs at START of play — tries multiple field names."""
+        about = play.get("about", {})
+        for field in ("startOuts", "outs"):
+            val = about.get(field)
+            if val is not None:
+                return int(val)
+        for ev in play.get("playEvents", []):
+            val = ev.get("count", {}).get("outs")
+            if val is not None:
+                return int(val)
+        return 0
+
+    def get_play_end_outs(play):
+        """Outs at END of play — last outs value seen in playEvents."""
+        last = None
+        for ev in play.get("playEvents", []):
+            val = ev.get("count", {}).get("outs")
+            if val is not None:
+                last = int(val)
+        return last if last is not None else get_play_outs(play)
+
+    # Second pass: compute IP per pitcher using next play's start outs as true exit outs
     for pid, p in pitcher_map.items():
         first_play = all_plays[p["first_play_idx"]]
         last_idx   = p["last_play_idx"]
+        last_play  = all_plays[last_idx]
 
-        entry_inning = first_play.get("about", {}).get("inning", 1)
-        entry_outs   = first_play.get("about", {}).get("startOuts", 0)
+        entry_inning = int(first_play.get("about", {}).get("inning", 1))
+        entry_outs   = get_play_outs(first_play)
 
         if last_idx + 1 < len(all_plays):
-            # Exit state = start of the very next play
             next_play   = all_plays[last_idx + 1]
-            exit_inning = next_play.get("about", {}).get("inning", 1)
-            exit_outs   = next_play.get("about", {}).get("startOuts", 0)
+            exit_inning = int(next_play.get("about", {}).get("inning", 1))
+            exit_outs   = get_play_outs(next_play)
         else:
-            # Pitcher faced the last batter of the game — use end-of-game inning/outs
-            last_play   = all_plays[last_idx]
-            exit_inning = last_play.get("about", {}).get("inning", 1)
-            # Count outs from playEvents on last play
-            exit_outs   = last_play.get("about", {}).get("startOuts", 0)
-            for ev in last_play.get("playEvents", []):
-                ev_outs = ev.get("count", {}).get("outs")
-                if ev_outs is not None:
-                    exit_outs = ev_outs
+            exit_inning = int(last_play.get("about", {}).get("inning", 1))
+            exit_outs   = get_play_end_outs(last_play)
 
         total_outs = abs_outs(exit_inning, exit_outs) - abs_outs(entry_inning, entry_outs)
         total_outs = max(total_outs, 0)
