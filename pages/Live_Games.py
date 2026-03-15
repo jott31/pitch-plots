@@ -347,7 +347,24 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list):
     strike_results = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
                       "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
 
-    headers = ["Pitcher", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
+    def calc_ip(pitches):
+        # Find the maximum (inning, outs) reached — outs recorded = (inning-1)*3 + max_outs_in_that_inning
+        # We only count top/bottom half matching the pitcher's role, so just use raw inning number
+        best = (0, 0)
+        for x in pitches:
+            try:
+                ing  = int(x.get("inning") or 0)
+                outs = int(x.get("outs")   or 0)
+                if (ing, outs) > best:
+                    best = (ing, outs)
+            except (TypeError, ValueError):
+                pass
+        total_outs = (best[0] - 1) * 3 + best[1] if best[0] > 0 else 0
+        whole  = total_outs // 3
+        thirds = total_outs  % 3
+        return f"{whole}.{thirds}" if thirds else str(whole)
+
+    headers = ["Pitcher", "IP", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
     header_row = "".join(f"<th>{h}</th>" for h in headers)
 
     rows_html = ""
@@ -373,9 +390,11 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list):
             for pt, cnt in sorted(type_counts.items(), key=lambda i: -i[1])[:5]
         )
 
+        ip = calc_ip(pitches)
+
         cells = [
             player_link(p["name"]),
-            total, avg_velo, max_velo, whiffs, strikes, balls, in_zone_pct, arsenal
+            ip, total, avg_velo, max_velo, whiffs, strikes, balls, in_zone_pct, arsenal
         ]
         rows_html += "<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
 
