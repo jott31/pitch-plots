@@ -344,11 +344,13 @@ def player_link(name):
 def fmt(val, suffix=""):
     return f"{val}{suffix}" if val is not None else "—"
 
-def build_and_render_team_section(team_abbr, team_name, pitcher_list):
+def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_stats=None):
     if not pitcher_list:
         return
 
     pitcher_list.sort(key=lambda p: -len(p["pitches"]))
+    if boxscore_stats is None:
+        boxscore_stats = {}
 
     swing_results  = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul", "Foul Tip",
                       "In play, out(s)", "In play, no out", "In play, runs"}
@@ -356,7 +358,7 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list):
     strike_results = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
                       "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
 
-    headers = ["Pitcher", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
+    headers = ["Pitcher", "IP", "H", "ER", "BB", "K", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
     header_row = "".join(f"<th>{h}</th>" for h in headers)
 
     rows_html = ""
@@ -382,8 +384,17 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list):
             for pt, cnt in sorted(type_counts.items(), key=lambda i: -i[1])[:5]
         )
 
+        # Boxscore stats from live feed
+        bs = boxscore_stats.get(p["id"], {})
+        ip = bs.get("inningsPitched", "—")
+        h  = bs.get("hits",         "—")
+        er = bs.get("earnedRuns",   "—")
+        bb = bs.get("baseOnBalls",  "—")
+        k  = bs.get("strikeOuts",   "—")
+
         cells = [
             player_link(p["name"]),
+            ip, h, er, bb, k,
             total, avg_velo, max_velo, whiffs, strikes, balls, in_zone_pct, arsenal
         ]
         rows_html += "<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
@@ -423,11 +434,21 @@ def show_team_section(team_abbr, team_name, pitcher_ids):
         for pid in pitcher_ids
         if pid in pitchers_with_pitches
     ]
-    build_and_render_team_section(team_abbr, team_name, team_pitchers)
+    build_and_render_team_section(team_abbr, team_name, team_pitchers, boxscore_stats)
 
 box = feed.get("liveData", {}).get("boxscore", {}).get("teams", {})
 away_pitcher_ids = box.get("away", {}).get("pitchers", [])
 home_pitcher_ids = box.get("home", {}).get("pitchers", [])
+
+# Build boxscore pitching stats lookup: player_id -> stats dict
+boxscore_stats = {}
+for side in ("away", "home"):
+    players = box.get(side, {}).get("players", {})
+    for key, pdata in players.items():
+        pid = pdata.get("person", {}).get("id")
+        stats = pdata.get("stats", {}).get("pitching", {})
+        if pid and stats:
+            boxscore_stats[pid] = stats
 
 show_team_section(away_abbr, away.get("name", away_abbr), away_pitcher_ids)
 show_team_section(home_abbr, home.get("name", home_abbr), home_pitcher_ids)
