@@ -112,7 +112,7 @@ def extract_pitchers(feed: dict) -> dict:
             else:
                 half = play.get("about", {}).get("halfInning", "")
                 team = home_abbr if half == "top" else away_abbr
-            pitcher_map[pid] = {"id": pid, "name": pname, "team": team, "pitches": []}
+            pitcher_map[pid] = {"id": pid, "name": pname, "team": team, "pitches": [], "first_play_idx": i}
 
         batter    = play.get("matchup", {}).get("batter", {}).get("fullName", "")
         bat_side  = play.get("matchup", {}).get("batSide", {}).get("code", "?")
@@ -348,7 +348,7 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_s
     if not pitcher_list:
         return
 
-    pitcher_list.sort(key=lambda p: -len(p["pitches"]))
+    pitcher_list.sort(key=lambda p: p.get("first_play_idx", 0))
     if boxscore_stats is None:
         boxscore_stats = {}
 
@@ -464,7 +464,7 @@ pitcher_options = {
     f"{p['name']} ({p['team']})  —  {len(p['pitches'])} pitches": pid
     for pid, p in sorted(
         pitchers_with_pitches.items(),
-        key=lambda i: -len(i[1]["pitches"])
+        key=lambda i: i[1].get("first_play_idx", 0)
     )
 }
 
