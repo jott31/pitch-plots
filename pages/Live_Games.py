@@ -81,10 +81,6 @@ def fetch_live_feed(game_pk: int) -> dict:
 # ----------------------------
 # Data extraction
 # ----------------------------
-def abs_outs(inning, outs):
-    """Convert inning + outs-in-inning to absolute out count from start of game."""
-    return (int(inning) - 1) * 3 + int(outs)
-
 def extract_pitchers(feed: dict) -> dict:
     """
     Extract all pitchers and their pitches from a live game feed.
@@ -116,12 +112,7 @@ def extract_pitchers(feed: dict) -> dict:
             else:
                 half = play.get("about", {}).get("halfInning", "")
                 team = home_abbr if half == "top" else away_abbr
-            pitcher_map[pid] = {
-                "id": pid, "name": pname, "team": team, "pitches": [],
-                "first_play_idx": i, "last_play_idx": i,
-            }
-        else:
-            pitcher_map[pid]["last_play_idx"] = i
+            pitcher_map[pid] = {"id": pid, "name": pname, "team": team, "pitches": []}
 
         batter    = play.get("matchup", {}).get("batter", {}).get("fullName", "")
         bat_side  = play.get("matchup", {}).get("batSide", {}).get("code", "?")
@@ -176,42 +167,6 @@ def extract_pitchers(feed: dict) -> dict:
                 "scoreline":  scoreline,
             })
 
-    def end_outs(play):
-        """Outs at END of a play = last outs value in playEvents, else about.outs."""
-        last = None
-        for ev in play.get("playEvents", []):
-            val = ev.get("count", {}).get("outs")
-            if val is not None:
-                last = int(val)
-        if last is not None:
-            return last
-        return int(play.get("about", {}).get("outs", 0))
-
-    # Second pass: compute IP per pitcher
-    # entry outs = end_outs of play immediately before pitcher's first play (0 if none)
-    # exit outs  = end_outs of pitcher's last play
-    for pid, p in pitcher_map.items():
-        first_idx  = p["first_play_idx"]
-        last_idx   = p["last_play_idx"]
-        first_play = all_plays[first_idx]
-        last_play  = all_plays[last_idx]
-
-        entry_inning = int(first_play.get("about", {}).get("inning", 1))
-        if first_idx > 0:
-            prev_play    = all_plays[first_idx - 1]
-            entry_inning = int(prev_play.get("about", {}).get("inning", entry_inning))
-            entry_outs   = end_outs(prev_play)
-        else:
-            entry_outs   = 0  # started from the very first play of the game
-
-        exit_inning = int(last_play.get("about", {}).get("inning", 1))
-        exit_outs   = end_outs(last_play)
-
-        total_outs = abs_outs(exit_inning, exit_outs) - abs_outs(entry_inning, entry_outs)
-        total_outs = max(total_outs, 0)
-        whole  = total_outs // 3
-        thirds = total_outs  % 3
-        p["ip"] = f"{whole}.{thirds}" if thirds else str(whole)
 
     return pitcher_map
 
@@ -322,10 +277,20 @@ def game_label(game):
 
 game_options = {game_label(g): g for g in games}
 
+# Default to a Reds game if one exists
+reds_keywords = ("CIN", "Cincinnati")
+default_idx = 0
+for i, (label, g) in enumerate(game_options.items()):
+    away = get_team_abbr(g, "away")
+    home = get_team_abbr(g, "home")
+    if any(k in away or k in home for k in reds_keywords):
+        default_idx = i
+        break
+
 selected_game_label = st.selectbox(
     "Select Game",
     options=list(game_options.keys()),
-    index=0,
+    index=default_idx,
 )
 selected_game = game_options[selected_game_label]
 game_pk = selected_game["gamePk"]
@@ -391,7 +356,7 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list):
     strike_results = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
                       "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
 
-    headers = ["Pitcher", "IP", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
+    headers = ["Pitcher", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
     header_row = "".join(f"<th>{h}</th>" for h in headers)
 
     rows_html = ""
@@ -419,7 +384,7 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list):
 
         cells = [
             player_link(p["name"]),
-            p.get("ip", "—"), total, avg_velo, max_velo, whiffs, strikes, balls, in_zone_pct, arsenal
+            total, avg_velo, max_velo, whiffs, strikes, balls, in_zone_pct, arsenal
         ]
         rows_html += "<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
 
