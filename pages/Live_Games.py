@@ -369,6 +369,8 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_s
         avg_velo = fmt(round(sum(velos)/len(velos), 1), " mph") if velos else "—"
         max_velo = fmt(round(max(velos), 1), " mph") if velos else "—"
         whiffs   = sum(1 for x in pitches if x["result"] in whiff_results)
+        swings   = sum(1 for x in pitches if x["result"] in swing_results)
+        whiff_str = f"{whiffs}/{swings}"
         strikes  = sum(1 for x in pitches if (x["result"] or "") in strike_results)
         balls    = sum(1 for x in pitches if (x["result"] or "").lower().startswith("ball"))
         in_zone  = sum(1 for x in pitches
@@ -395,7 +397,7 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_s
         cells = [
             player_link(p["name"]),
             ip, h, er, bb, k,
-            total, avg_velo, max_velo, whiffs, strikes, balls, in_zone_pct, arsenal
+            total, avg_velo, max_velo, whiff_str, strikes, balls, in_zone_pct, arsenal
         ]
         rows_html += "<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
 
@@ -512,7 +514,7 @@ m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
 m1.metric("Pitches", total)
 m2.metric("Avg Velo (mph)", avg_v)
 m3.metric("Max Velo (mph)", max_v)
-m4.metric("Whiffs", whiffs)
+m4.metric("Whiffs/Swings", f"{whiffs}/{int(swings)}")
 m5.metric("Strikes", strikes)
 m6.metric("Balls", balls)
 m7.metric("In Zone%", in_zone_pct)
@@ -537,7 +539,7 @@ if not df.empty:
             "Usage%":    round(n / total * 100, 1),
             "Avg Velo":  round(v.mean(), 1) if len(v) else None,
             "Max Velo":  round(v.max(),  1) if len(v) else None,
-            "Whiffs":    int(wh),
+            "Whiffs":    f"{int(wh)}/{int(sw)}",
             "Strikes":   int(str_count),
             "Balls":     int(bl_count),
             "InZone%":   round(iz_count  / n * 100, 1) if n else None,
@@ -585,12 +587,14 @@ with col_left:
                 mode="markers",
                 name=f"{pt} — {pitch_name(pt)}",
                 marker=dict(color=pitch_color(pt), size=8, opacity=0.8),
-                customdata=sub[["velo", "result", "batter"]],
+                customdata=sub[["velo", "result", "batter", "balls", "strikes", "half", "inning", "outs"]],
                 hovertemplate=(
                     "<b>%{fullData.name}</b><br>"
+                    "Batter: %{customdata[2]}<br>"
+                    "Count: %{customdata[3]}-%{customdata[4]}<br>"
+                    "%{customdata[5]} %{customdata[6]}, %{customdata[7]} out<br>"
                     "Velo: %{customdata[0]} mph<br>"
-                    "Result: %{customdata[1]}<br>"
-                    "Batter: %{customdata[2]}<extra></extra>"
+                    "Result: %{customdata[1]}<extra></extra>"
                 ),
             ))
 
@@ -624,18 +628,29 @@ with col_left:
 with col_right:
     st.markdown("### Pitch Location")
     if not loc_df.empty:
-        fig2 = px.scatter(
-            loc_df, x="p_x", y="p_z",
-            color="pitch_type",
-            color_discrete_map=PITCH_COLORS,
-            hover_data=["velo", "result", "batter", "pitch_name"],
-            labels={"p_x": "Horizontal", "p_z": "Height", "pitch_type": "Pitch"},
-        )
+        fig2 = go.Figure()
+        for pt in loc_df["pitch_type"].unique():
+            sub2 = loc_df[loc_df["pitch_type"] == pt]
+            fig2.add_trace(go.Scatter(
+                x=sub2["p_x"], y=sub2["p_z"],
+                mode="markers",
+                name=f"{pt} — {pitch_name(pt)}",
+                marker=dict(color=pitch_color(pt), size=8, opacity=0.8),
+                customdata=sub2[["velo", "result", "batter", "balls", "strikes", "half", "inning", "outs"]],
+                hovertemplate=(
+                    "<b>%{fullData.name}</b><br>"
+                    "Batter: %{customdata[2]}<br>"
+                    "Count: %{customdata[3]}-%{customdata[4]}<br>"
+                    "%{customdata[5]} %{customdata[6]}, %{customdata[7]} out<br>"
+                    "Velo: %{customdata[0]} mph<br>"
+                    "Result: %{customdata[1]}<extra></extra>"
+                ),
+            ))
         # Strike zone
         fig2.add_shape(type="rect", x0=-0.83, x1=0.83, y0=1.5, y1=3.5,
                        line=dict(color="white", width=2))
-        fig2.update_xaxes(range=[2, -2])
-        fig2.update_yaxes(range=[0, 6])
+        fig2.update_xaxes(title="Horizontal", range=[2, -2])
+        fig2.update_yaxes(title="Height", range=[0, 6])
         fig2.update_layout(height=420, legend=dict(orientation="h", y=-0.2))
         st.plotly_chart(fig2, use_container_width=True)
     else:
