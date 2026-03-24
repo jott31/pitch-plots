@@ -649,9 +649,9 @@ with col_right:
         # Strike zone
         fig2.add_shape(type="rect", x0=-0.83, x1=0.83, y0=1.5, y1=3.5,
                        line=dict(color="white", width=2))
-        fig2.update_xaxes(title="Horizontal", range=[2, -2])
-        fig2.update_yaxes(title="Height", range=[0, 6])
-        fig2.update_layout(height=420, legend=dict(orientation="h", y=-0.2))
+        fig2.update_xaxes(title="Horizontal (ft)", range=[2, -2], constrain="domain")
+        fig2.update_yaxes(title="Height (ft)", range=[0, 6], scaleanchor="x", scaleratio=1)
+        fig2.update_layout(height=520, legend=dict(orientation="h", y=-0.15))
         st.plotly_chart(fig2, use_container_width=True)
     else:
         st.info("No location data available yet.")
