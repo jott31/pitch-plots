@@ -608,10 +608,13 @@ with col_left:
             pt    = row["pitch_type"]
             rx    = row["rel_x"]
             rz    = row["rel_z"]
-            # rel_z is absolute height (~6ft off ground) — subtract shoulder
-            # reference height so the angle is relative to body center, not ground
-            # Savant uses ~5.5ft as the reference point for arm slot calculation
-            rz_adj = rz - 5.5
+            # Savant arm angle is measured from horizontal (3 o'clock = 0 deg,
+            # 12 o'clock = 90 deg). rel_z ranges ~5-7ft and rel_x ranges ~-3 to 3ft.
+            # We normalise by compressing rel_z: subtract the typical mid-release
+            # height (~6ft) and scale so the resulting ratio matches real arm angles.
+            # A 26-deg arm angle (Singer) means tan(26°)≈0.49, so with rel_x≈2.5ft
+            # we need rz_adj≈1.2ft — achieved by subtracting ~6ft and scaling by 2.
+            rz_adj = (rz - 6.0) * 6.0
             angle = math.atan2(rz_adj, rx)
             dx = LINE_LEN * math.cos(angle)
             dy = LINE_LEN * math.sin(angle)
