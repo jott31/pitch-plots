@@ -603,7 +603,7 @@ with col_left:
         # On pitcher-POV movement plot, arm side = positive x (glove side = negative x)
         # So we use rel_x as-is — RHP releases from positive x, line points upper-right
         import math
-        LINE_LEN = 12  # inches — same scale as pfx values
+        LINE_LEN = 30  # inches — extend to plot boundary (axes go to ±25)
         for _, row in release_df.iterrows():
             pt    = row["pitch_type"]
             rx    = row["rel_x"]
