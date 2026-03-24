@@ -470,30 +470,51 @@ scatter_plot.add_vline(x=0, line_color="white", line_width=1)
 # ----------------------------
 # Pitch Location Plot
 # ----------------------------
-scatter_plot_2 = px.scatter(
-    filtered_data,
-    x="plate_x",
-    y="plate_z",
-    color="pitch_type",
-    title="Pitch Location",
-    labels={
-        "plate_x": "Horizontal Location",
-        "plate_z": "Vertical Location"
-    },
-    hover_data=["release_speed", "pitch_type"],
-    color_discrete_map=pitch_colors_mapping
-)
+loc_data = filtered_data.dropna(subset=["plate_x", "plate_z"])
 
-# Strike Zone Overlay
+scatter_plot_2 = go.Figure()
+for pitch in loc_data["pitch_type"].dropna().unique():
+    pitch_df = loc_data[loc_data["pitch_type"] == pitch]
+    # Build customdata: balls, strikes, inning, outs, batter
+    cd_cols = []
+    for col in ["balls", "strikes", "inning", "outs_when_up", "batter_name"]:
+        if col in pitch_df.columns:
+            cd_cols.append(col)
+        else:
+            pitch_df = pitch_df.copy()
+            pitch_df[col] = "?"
+            cd_cols.append(col)
+    scatter_plot_2.add_trace(go.Scatter(
+        x=pitch_df["plate_x"],
+        y=pitch_df["plate_z"],
+        mode="markers",
+        name=pitch,
+        marker=dict(color=pitch_colors_mapping.get(pitch, "gray"), size=7, opacity=0.7),
+        customdata=pitch_df[["release_speed", "balls", "strikes", "inning", "outs_when_up", "batter_name"]],
+        hovertemplate=(
+            "<b>%{fullData.name}</b><br>"
+            "Batter: %{customdata[5]}<br>"
+            "Count: %{customdata[1]}-%{customdata[2]}<br>"
+            "Inning: %{customdata[3]}, %{customdata[4]} out<br>"
+            "Velo: %{customdata[0]} mph<extra></extra>"
+        ),
+    ))
+
+# Strike zone overlay
 scatter_plot_2.add_shape(
     type="rect",
     x0=-0.83, x1=0.83,
     y0=1.5, y1=3.5,
-    line=dict(width=2)
+    line=dict(color="white", width=2)
 )
 
-scatter_plot_2.update_xaxes(range=[2, -2])
-scatter_plot_2.update_yaxes(range=[0, 6])
+scatter_plot_2.update_xaxes(
+    title="Horizontal (ft)", range=[2, -2], constrain="domain"
+)
+scatter_plot_2.update_yaxes(
+    title="Height (ft)", range=[0, 6], scaleanchor="x", scaleratio=1
+)
+scatter_plot_2.update_layout(height=520, legend=dict(orientation="h", y=-0.15))
 
 st.markdown("---")
 
