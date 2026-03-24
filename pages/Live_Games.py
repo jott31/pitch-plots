@@ -608,7 +608,11 @@ with col_left:
             pt    = row["pitch_type"]
             rx    = row["rel_x"]
             rz    = row["rel_z"]
-            angle = math.atan2(rz, rx)
+            # rel_z is absolute height (~6ft off ground) — subtract shoulder
+            # reference height so the angle is relative to body center, not ground
+            # Savant uses ~5.5ft as the reference point for arm slot calculation
+            rz_adj = rz - 5.5
+            angle = math.atan2(rz_adj, rx)
             dx = LINE_LEN * math.cos(angle)
             dy = LINE_LEN * math.sin(angle)
             fig.add_trace(go.Scatter(
