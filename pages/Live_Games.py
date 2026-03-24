@@ -610,8 +610,8 @@ with col_left:
                 marker=dict(
                     symbol="x",
                     size=14,
-                    color=pitch_color(pt),
-                    line=dict(width=2, color=pitch_color(pt)),
+                    color="white",
+                    line=dict(width=2, color="white"),
                 ),
                 name=pt + " Release",
                 showlegend=False,
