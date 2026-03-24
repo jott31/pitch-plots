@@ -598,15 +598,25 @@ with col_left:
                 ),
             ))
 
-        # Add arm slot lines
+        # Add arm slot lines through origin in direction of release angle
+        # rel_x is horizontal release position (negative = arm side for RHP)
+        # rel_z is vertical release height (~6ft) — we negate rel_x so line
+        # points toward glove side (matching pitcher POV of the movement plot)
+        import math
+        LINE_LEN = 12  # inches — same scale as pfx values
         for _, row in release_df.iterrows():
             pt    = row["pitch_type"]
-            x_val = row["rel_x"] * scale_factor
-            z_val = row["rel_z"] * scale_factor
+            rx    = row["rel_x"]
+            rz    = row["rel_z"]
+            # Angle of arm slot: atan2(height, horizontal offset from center)
+            # Negate rx to match pitcher POV (arm side is negative x on movement plot)
+            angle = math.atan2(rz, -rx)
+            dx = LINE_LEN * math.cos(angle)
+            dy = LINE_LEN * math.sin(angle)
             fig.add_trace(go.Scatter(
-                x=[0, x_val], y=[0, z_val],
+                x=[-dx, dx], y=[-dy, dy],
                 mode="lines",
-                line=dict(dash="dash", width=3, color=pitch_color(pt)),
+                line=dict(dash="dash", width=2, color=pitch_color(pt)),
                 name=f"{pt} Arm Slot",
                 showlegend=False,
             ))
