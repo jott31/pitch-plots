@@ -615,15 +615,9 @@ with col_left:
             # A 26-deg arm angle (Singer) means tan(26°)≈0.49, so with rel_x≈2.5ft
             # we need rz_adj≈1.2ft — achieved by subtracting ~6ft and scaling by 2.
             rz_adj = (rz - 6.0) * 6.0
-            # rel_x is negative for RHP from catcher POV — use abs() so the
-            # line always points into the correct upper quadrant, then flip
-            # direction based on which side the pitcher throws from
+            # abs(rx) so line always points into Q1/Q4 on pitcher POV plot
+            # regardless of whether rel_x is negative (RHP) or positive (LHP)
             angle = math.atan2(rz_adj, abs(rx))
-            # LHP releases from negative x (catcher POV) = positive x pitcher POV
-            # RHP releases from positive x (catcher POV) = negative x pitcher POV
-            # rel_x < 0 means first-base side = RHP arm side = positive x on plot
-            if rx > 0:
-                angle = math.pi - angle  # flip to correct side for LHP
             dx = LINE_LEN * math.cos(angle)
             dy = LINE_LEN * math.sin(angle)
             fig.add_trace(go.Scatter(
