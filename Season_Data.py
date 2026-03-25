@@ -528,3 +528,59 @@ with col1:
 with col2:
     st.write("### Pitch Location")
     st.plotly_chart(scatter_plot_2, use_container_width=True)
+
+# ----------------------------
+# Avg Velocity by Inning
+# ----------------------------
+velo_inning_data = filtered_data.dropna(subset=["release_speed", "inning"])
+
+if not velo_inning_data.empty:
+    st.write("### Avg Velocity by Inning")
+
+    inning_fig = go.Figure()
+
+    for pitch in sorted(velo_inning_data["pitch_type"].dropna().unique()):
+        sub = velo_inning_data[velo_inning_data["pitch_type"] == pitch]
+        avg_by_inning = (
+            sub.groupby("inning")["release_speed"]
+            .agg(avg_velo="mean", count="count")
+            .reset_index()
+            .sort_values("inning")
+        )
+        avg_by_inning["avg_velo"] = avg_by_inning["avg_velo"].round(1)
+
+        inning_fig.add_trace(go.Scatter(
+            x=avg_by_inning["inning"],
+            y=avg_by_inning["avg_velo"],
+            mode="lines+markers",
+            name=pitch,
+            line=dict(color=pitch_colors_mapping.get(pitch, "gray"), width=2),
+            marker=dict(color=pitch_colors_mapping.get(pitch, "gray"), size=8),
+            customdata=avg_by_inning[["count"]],
+            hovertemplate=(
+                "<b>%{fullData.name}</b><br>"
+                "Inning: %{x}<br>"
+                "Avg Velo: %{y} mph<br>"
+                "Pitches: %{customdata[0]}<extra></extra>"
+            ),
+        ))
+
+    all_innings = sorted(velo_inning_data["inning"].dropna().unique())
+    inning_fig.update_xaxes(
+        title="Inning",
+        tickmode="array",
+        tickvals=all_innings,
+        ticktext=[str(int(i)) for i in all_innings],
+        showgrid=False,
+    )
+    inning_fig.update_yaxes(
+        title="Avg Velocity (mph)",
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.08)",
+    )
+    inning_fig.update_layout(
+        height=350,
+        legend=dict(orientation="h", y=-0.2),
+        margin=dict(t=30),
+    )
+    st.plotly_chart(inning_fig, use_container_width=True)
