@@ -307,7 +307,8 @@ swing_events = [
 
 whiff_events = [
     "swinging_strike",
-    "swinging_strike_blocked"
+    "swinging_strike_blocked",
+    "foul_tip",
 ]
 
 metrics_df = (
