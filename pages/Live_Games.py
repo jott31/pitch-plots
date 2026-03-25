@@ -668,6 +668,74 @@ with col_right:
         st.info("No location data available yet.")
 
 # ----------------------------
+# Velocity by pitch sequence
+# ----------------------------
+if not df.empty and "velo" in df.columns:
+    seq_df = df.reset_index(drop=True).copy()
+    seq_df["pitch_num"] = seq_df.index + 1
+
+    velo_fig = go.Figure()
+
+    # One trace per pitch type so colors match the rest of the dashboard
+    for pt in seq_df["pitch_type"].unique():
+        sub = seq_df[seq_df["pitch_type"] == pt]
+        velo_fig.add_trace(go.Scatter(
+            x=sub["pitch_num"],
+            y=sub["velo"],
+            mode="markers",
+            name=f"{pt} — {pitch_name(pt)}",
+            marker=dict(color=pitch_color(pt), size=8, opacity=0.85),
+            customdata=sub[["result", "batter", "balls", "strikes", "half", "inning", "outs"]],
+            hovertemplate=(
+                "<b>%{fullData.name}</b><br>"
+                "Pitch #%{x}<br>"
+                "Velo: %{y} mph<br>"
+                "Batter: %{customdata[1]}<br>"
+                "Count: %{customdata[2]}-%{customdata[3]}<br>"
+                "%{customdata[4]} %{customdata[5]}, %{customdata[6]} out<br>"
+                "Result: %{customdata[0]}<extra></extra>"
+            ),
+        ))
+
+    # Add inning divider lines and labels
+    if "inning" in seq_df.columns and "half" in seq_df.columns:
+        # Find the first pitch number of each inning+half combination
+        seen = set()
+        for _, row in seq_df.iterrows():
+            key = (row["inning"], row["half"])
+            if key not in seen:
+                seen.add(key)
+                pnum = row["pitch_num"]
+                if pnum > 1:  # no line before the very first pitch
+                    velo_fig.add_vline(
+                        x=pnum - 0.5,
+                        line=dict(color="rgba(255,255,255,0.2)", width=1, dash="dot"),
+                    )
+                # Inning label at top of plot
+                label = row["half"] + " " + str(row["inning"])
+                velo_fig.add_annotation(
+                    x=pnum,
+                    y=1.02,
+                    xref="x",
+                    yref="paper",
+                    text=label,
+                    showarrow=False,
+                    font=dict(size=10, color="rgba(255,255,255,0.5)"),
+                    xanchor="left",
+                )
+
+    velo_fig.update_xaxes(title="Pitch #", showgrid=False)
+    velo_fig.update_yaxes(title="Velocity (mph)", showgrid=True,
+                          gridcolor="rgba(255,255,255,0.08)")
+    velo_fig.update_layout(
+        height=350,
+        legend=dict(orientation="h", y=-0.2),
+        margin=dict(t=30),
+    )
+    st.markdown("### Velocity by Pitch Sequence")
+    st.plotly_chart(velo_fig, use_container_width=True)
+
+# ----------------------------
 # Pitch log table
 # ----------------------------
 with st.expander("Pitch Log", expanded=False):
