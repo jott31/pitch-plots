@@ -354,7 +354,7 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_s
 
     swing_results  = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul", "Foul Tip",
                       "In play, out(s)", "In play, no out", "In play, runs"}
-    whiff_results  = {"Swinging Strike", "Swinging Strike (Blocked)"}
+    whiff_results  = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul Tip"}
     strike_results = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
                       "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
 
@@ -499,7 +499,7 @@ max_v   = f"{velos.max():.1f}"  if len(velos) else "—"
 
 swing_r  = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul", "Foul Tip",
             "In play, out(s)", "In play, no out", "In play, runs"}
-whiff_r  = {"Swinging Strike", "Swinging Strike (Blocked)"}
+whiff_r  = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul Tip"}
 strike_r = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
              "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
 swings   = df["result"].isin(swing_r).sum()
