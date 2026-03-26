@@ -584,3 +584,39 @@ if not velo_inning_data.empty:
         margin=dict(t=30),
     )
     st.plotly_chart(inning_fig, use_container_width=True)
+
+# ----------------------------
+# Spin Rate by Pitch Type
+# ----------------------------
+spin_data = filtered_data.dropna(subset=["release_spin_rate"])
+
+if not spin_data.empty:
+    st.write("### Spin Rate by Pitch Type")
+
+    spin_fig = go.Figure()
+
+    for pitch in sorted(spin_data["pitch_type"].dropna().unique()):
+        sub = spin_data[spin_data["pitch_type"] == pitch]
+        spin_fig.add_trace(go.Box(
+            y=sub["release_spin_rate"],
+            name=pitch,
+            marker_color=pitch_colors_mapping.get(pitch, "gray"),
+            boxmean=True,
+            hovertemplate=(
+                "<b>%{fullData.name}</b><br>"
+                "Spin: %{y} rpm<extra></extra>"
+            ),
+        ))
+
+    spin_fig.update_yaxes(
+        title="Spin Rate (rpm)",
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.08)",
+    )
+    spin_fig.update_xaxes(title="Pitch Type")
+    spin_fig.update_layout(
+        height=400,
+        showlegend=False,
+        margin=dict(t=30),
+    )
+    st.plotly_chart(spin_fig, use_container_width=True)
