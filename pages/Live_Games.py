@@ -141,6 +141,7 @@ def extract_pitchers(feed: dict) -> dict:
             rel_x      = coords.get("x0")
             rel_z      = coords.get("z0")
             spin_rate  = breaks.get("spinRate")
+            spin_axis  = breaks.get("spinDirection")
             result     = ev.get("details", {}).get("description", "")
             balls      = ev.get("count", {}).get("balls", "?")
             strikes    = ev.get("count", {}).get("strikes", "?")
@@ -156,6 +157,7 @@ def extract_pitchers(feed: dict) -> dict:
                 "rel_x":      round(rel_x, 2) if rel_x is not None else None,
                 "rel_z":      round(rel_z, 2) if rel_z is not None else None,
                 "spin_rate":  round(spin_rate) if spin_rate is not None else None,
+                "spin_axis":  round(spin_axis) if spin_axis is not None else None,
                 "result":     result,
                 "balls":      balls,
                 "strikes":    strikes,
@@ -736,37 +738,50 @@ if not df.empty and "velo" in df.columns:
     st.plotly_chart(velo_fig, use_container_width=True)
 
 # ----------------------------
-# Spin Rate by Pitch Type
+# Spin Rate & Axis
 # ----------------------------
-spin_df = df.dropna(subset=["spin_rate"])
+spin_df = df.dropna(subset=["spin_rate", "spin_axis"])
 
 if not spin_df.empty:
-    st.markdown("### Spin Rate by Pitch Type")
+    st.markdown("### Spin Rate & Axis")
 
     spin_fig = go.Figure()
 
     for pt in sorted(spin_df["pitch_type"].dropna().unique()):
         sub = spin_df[spin_df["pitch_type"] == pt]
-        spin_fig.add_trace(go.Box(
+        spin_fig.add_trace(go.Scatter(
+            x=sub["spin_axis"],
             y=sub["spin_rate"],
+            mode="markers",
             name=f"{pt} — {pitch_name(pt)}",
-            marker_color=pitch_color(pt),
-            boxmean=True,
+            marker=dict(color=pitch_color(pt), size=8, opacity=0.75),
+            customdata=sub[["velo", "result", "batter"]],
             hovertemplate=(
                 "<b>%{fullData.name}</b><br>"
-                "Spin: %{y} rpm<extra></extra>"
+                "Spin Rate: %{y} rpm<br>"
+                "Spin Axis: %{x}°<br>"
+                "Velo: %{customdata[0]} mph<br>"
+                "Batter: %{customdata[2]}<br>"
+                "Result: %{customdata[1]}<extra></extra>"
             ),
         ))
 
+    spin_fig.update_xaxes(
+        title="Spin Axis (°)",
+        range=[0, 360],
+        tickvals=[0, 90, 180, 270, 360],
+        ticktext=["0°", "90°", "180°", "270°", "360°"],
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.08)",
+    )
     spin_fig.update_yaxes(
         title="Spin Rate (rpm)",
         showgrid=True,
         gridcolor="rgba(255,255,255,0.08)",
     )
-    spin_fig.update_xaxes(title="Pitch Type")
     spin_fig.update_layout(
         height=400,
-        showlegend=False,
+        legend=dict(orientation="h", y=-0.2),
         margin=dict(t=30),
     )
     st.plotly_chart(spin_fig, use_container_width=True)
