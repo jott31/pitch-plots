@@ -586,37 +586,49 @@ if not velo_inning_data.empty:
     st.plotly_chart(inning_fig, use_container_width=True)
 
 # ----------------------------
-# Spin Rate by Pitch Type
+# Spin Rate & Axis
 # ----------------------------
-spin_data = filtered_data.dropna(subset=["release_spin_rate"])
+spin_data = filtered_data.dropna(subset=["release_spin_rate", "spin_axis"])
 
 if not spin_data.empty:
-    st.write("### Spin Rate by Pitch Type")
+    st.write("### Spin Rate & Axis")
 
     spin_fig = go.Figure()
 
     for pitch in sorted(spin_data["pitch_type"].dropna().unique()):
         sub = spin_data[spin_data["pitch_type"] == pitch]
-        spin_fig.add_trace(go.Box(
+        spin_fig.add_trace(go.Scatter(
+            x=sub["spin_axis"],
             y=sub["release_spin_rate"],
+            mode="markers",
             name=pitch,
-            marker_color=pitch_colors_mapping.get(pitch, "gray"),
-            boxmean=True,
+            marker=dict(color=pitch_colors_mapping.get(pitch, "gray"), size=7, opacity=0.75),
+            customdata=sub[["release_speed", "batter_name"]],
             hovertemplate=(
                 "<b>%{fullData.name}</b><br>"
-                "Spin: %{y} rpm<extra></extra>"
+                "Spin Rate: %{y} rpm<br>"
+                "Spin Axis: %{x}°<br>"
+                "Velo: %{customdata[0]} mph<br>"
+                "Batter: %{customdata[1]}<extra></extra>"
             ),
         ))
 
+    spin_fig.update_xaxes(
+        title="Spin Axis (°)",
+        range=[0, 360],
+        tickvals=[0, 90, 180, 270, 360],
+        ticktext=["0°", "90°", "180°", "270°", "360°"],
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.08)",
+    )
     spin_fig.update_yaxes(
         title="Spin Rate (rpm)",
         showgrid=True,
         gridcolor="rgba(255,255,255,0.08)",
     )
-    spin_fig.update_xaxes(title="Pitch Type")
     spin_fig.update_layout(
         height=400,
-        showlegend=False,
+        legend=dict(orientation="h", y=-0.2),
         margin=dict(t=30),
     )
     st.plotly_chart(spin_fig, use_container_width=True)
