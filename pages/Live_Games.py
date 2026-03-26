@@ -736,6 +736,42 @@ if not df.empty and "velo" in df.columns:
     st.plotly_chart(velo_fig, use_container_width=True)
 
 # ----------------------------
+# Spin Rate by Pitch Type
+# ----------------------------
+spin_df = df.dropna(subset=["spin_rate"])
+
+if not spin_df.empty:
+    st.markdown("### Spin Rate by Pitch Type")
+
+    spin_fig = go.Figure()
+
+    for pt in sorted(spin_df["pitch_type"].dropna().unique()):
+        sub = spin_df[spin_df["pitch_type"] == pt]
+        spin_fig.add_trace(go.Box(
+            y=sub["spin_rate"],
+            name=f"{pt} — {pitch_name(pt)}",
+            marker_color=pitch_color(pt),
+            boxmean=True,
+            hovertemplate=(
+                "<b>%{fullData.name}</b><br>"
+                "Spin: %{y} rpm<extra></extra>"
+            ),
+        ))
+
+    spin_fig.update_yaxes(
+        title="Spin Rate (rpm)",
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.08)",
+    )
+    spin_fig.update_xaxes(title="Pitch Type")
+    spin_fig.update_layout(
+        height=400,
+        showlegend=False,
+        margin=dict(t=30),
+    )
+    st.plotly_chart(spin_fig, use_container_width=True)
+
+# ----------------------------
 # Pitch log table
 # ----------------------------
 with st.expander("Pitch Log", expanded=False):
