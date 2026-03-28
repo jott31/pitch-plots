@@ -55,9 +55,9 @@ def get_et_today():
         return (datetime.now(timezone.utc) - timedelta(hours=5)).date()
 
 @st.cache_data(ttl=30)   # short TTL so live data stays fresh for today
-def fetch_games(date_str: str, game_type: str) -> list:
+def fetch_games(date_str: str, game_type: str, sport_id: int = 1) -> list:
     url = (
-        f"{BASE}/schedule?sportId=1"
+        f"{BASE}/schedule?sportId={sport_id}"
         f"&date={date_str}"
         f"&gameType={game_type}"
         f"&hydrate=teams,linescore,decisions,pitchers"
@@ -227,6 +227,13 @@ GAME_TYPE_LABELS = {
 # Request all game types at once — no user selection needed
 game_type = "R,S,F,D,L,W"
 
+league = st.sidebar.radio(
+    "League",
+    options=["MLB", "AAA"],
+    horizontal=True,
+)
+sport_id = 1 if league == "MLB" else 11
+
 if st.sidebar.button("↻ Refresh"):
     st.cache_data.clear()
 
@@ -238,16 +245,16 @@ is_today = (selected_date == et_today)
 
 try:
     with st.spinner("Loading games..."):
-        games = fetch_games(date_str, game_type)
+        games = fetch_games(date_str, game_type, sport_id)
 except Exception as e:
     st.error(f"Could not load games: {e}")
     st.stop()
 
 date_label = selected_date.strftime("%A, %B %-d, %Y")
-st.caption(f"{'Today — ' if is_today else ''}{date_label}")
+st.caption(f"{'Today — ' if is_today else ''}{date_label} — {league}")
 
 if not games:
-    st.info(f"No games found for {date_label}. Try a different date.")
+    st.info(f"No {league} games found for {date_label}. Try a different date.")
     st.stop()
 
 # ----------------------------
@@ -297,13 +304,16 @@ def game_label(game):
 
 game_options = {game_label(g): g for g in games}
 
-# Default to a Reds game if one exists
-reds_keywords = ("CIN", "Cincinnati")
+# Default to preferred team: Louisville Bats (AAA) or Reds (MLB)
+priority_keywords = ("LOU", "Louisville") if sport_id == 11 else ("CIN", "Cincinnati")
 default_idx = 0
 for i, (label, g) in enumerate(game_options.items()):
     away = get_team_abbr(g, "away")
     home = get_team_abbr(g, "home")
-    if any(k in away or k in home for k in reds_keywords):
+    away_name = g.get("teams", {}).get("away", {}).get("team", {}).get("name", "")
+    home_name = g.get("teams", {}).get("home", {}).get("team", {}).get("name", "")
+    all_names = (away, home, away_name, home_name)
+    if any(k in n for k in priority_keywords for n in all_names):
         default_idx = i
         break
 
