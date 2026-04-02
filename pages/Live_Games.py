@@ -153,11 +153,13 @@ def extract_pitchers(feed: dict) -> dict:
             p_z        = coords.get("pZ")
             rel_x      = coords.get("x0")
             rel_z      = coords.get("z0")
-            spin_rate  = breaks.get("spinRate")
-            spin_axis  = breaks.get("spinDirection")
-            result     = ev.get("details", {}).get("description", "")
-            balls      = ev.get("count", {}).get("balls", "?")
-            strikes    = ev.get("count", {}).get("strikes", "?")
+            spin_rate   = breaks.get("spinRate")
+            spin_axis   = breaks.get("spinDirection")
+            result      = ev.get("details", {}).get("description", "")
+            balls       = ev.get("count", {}).get("balls", "?")
+            strikes     = ev.get("count", {}).get("strikes", "?")
+            hit_data    = ev.get("hitData") or {}
+            exit_velo   = hit_data.get("launchSpeed")
 
             pitcher_map[pid]["pitches"].append({
                 "pitch_type": pitch_type,
@@ -174,6 +176,7 @@ def extract_pitchers(feed: dict) -> dict:
                 "result":     result,
                 "balls":      balls,
                 "strikes":    strikes,
+                "exit_velo":  round(exit_velo, 1) if exit_velo is not None else None,
                 "batter":     batter,
                 "bat_side":   bat_side,
                 "inning":     inning,
@@ -385,7 +388,7 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_s
     strike_results = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
                       "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
 
-    headers = ["Pitcher", "IP", "H", "ER", "BB", "K", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
+    headers = ["Pitcher", "IP", "H", "ER", "BB", "K", "HH", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
     header_row = "".join(f"<th>{h}</th>" for h in headers)
 
     rows_html = ""
@@ -405,6 +408,9 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_s
                        and x.get("p_x") is not None and -0.83 <= x["p_x"] <= 0.83)
         in_zone_pct = fmt(round(in_zone / total * 100, 1), "%") if total else "—"
 
+        hard_hits = sum(1 for x in pitches
+                        if x.get("exit_velo") is not None and x["exit_velo"] >= 95)
+
         type_counts = {}
         for x in pitches:
             type_counts[x["pitch_type"]] = type_counts.get(x["pitch_type"], 0) + 1
@@ -422,7 +428,7 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_s
 
         cells = [
             player_link(p["name"]),
-            ip, h, er, bb, k,
+            ip, h, er, bb, k, hard_hits,
             total, avg_velo, max_velo, whiff_str, strikes, balls, in_zone_pct, arsenal
         ]
         rows_html += "<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
@@ -781,7 +787,7 @@ if not spin_df.empty:
 # ----------------------------
 with st.expander("Pitch Log", expanded=False):
     log_cols = ["inning", "half", "batter", "bat_side", "pitch_type",
-                "pitch_name", "velo", "pfx_x", "pfx_z", "balls", "strikes", "result"]
+                "pitch_name", "velo", "exit_velo", "pfx_x", "pfx_z", "balls", "strikes", "result"]
     available_cols = [c for c in log_cols if c in df.columns]
     log_df = df[available_cols].copy()
     log_df.columns = [c.replace("_", " ").title() for c in log_df.columns]
