@@ -274,7 +274,12 @@ selected_pitches = st.multiselect(
     default=pitch_types
 )
 
-filtered_data = data[data["pitch_type"].isin(selected_pitches)]
+filtered_data = data[data["pitch_type"].isin(selected_pitches)].copy()
+
+# Ensure optional columns exist — some seasons / venues omit these
+for _col in ["batter_name", "outs_when_up"]:
+    if _col not in filtered_data.columns:
+        filtered_data[_col] = "?"
 
 # ----------------------------
 # Advanced Pitch Metrics
@@ -458,10 +463,6 @@ loc_data = filtered_data.dropna(subset=["plate_x", "plate_z"])
 scatter_plot_2 = go.Figure()
 for pitch in loc_data["pitch_type"].dropna().unique():
     pitch_df = loc_data[loc_data["pitch_type"] == pitch]
-    for col in ["balls", "strikes", "inning", "outs_when_up", "batter_name"]:
-        if col not in pitch_df.columns:
-            pitch_df = pitch_df.copy()
-            pitch_df[col] = "?"
     scatter_plot_2.add_trace(go.Scatter(
         x=pitch_df["plate_x"],
         y=pitch_df["plate_z"],
