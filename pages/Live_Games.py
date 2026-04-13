@@ -1,4 +1,5 @@
 import requests
+import threading
 from datetime import datetime, timezone
 import streamlit as st
 import plotly.express as px
@@ -37,24 +38,6 @@ PITCH_COLORS = {
     "EP": "#648FFF",
 }
 
-# Sport ID map for the league selector
-LEAGUE_OPTIONS = {
-    "MLB":         1,
-    "AAA":        11,
-    "AA":         12,
-    "High-A":     13,
-    "Low-A (FSL)": 14,
-}
-
-# Preferred teams per sport level (checked against abbr + full name)
-PRIORITY_TEAMS = {
-    1:  ("CIN", "Cincinnati"),   # MLB  → Reds
-    11: ("LOU", "Louisville"),   # AAA  → Louisville Bats
-    12: ("CHA", "Chattanooga"),  # AA   → Chattanooga Lookouts (Reds affiliate)
-    13: ("DAY", "Dayton"),       # High-A → Dayton Dragons
-    14: ("DBT", "Daytona"),      # Low-A FSL → Daytona Tortugas (Reds FSL affiliate)
-}
-
 def pitch_name(code):
     return PITCH_NAMES.get(code, code or "Unknown")
 
@@ -72,7 +55,7 @@ def get_et_today():
         from datetime import timedelta
         return (datetime.now(timezone.utc) - timedelta(hours=5)).date()
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=30)   # short TTL so live data stays fresh for today
 def fetch_games(date_str: str, game_type: str, sport_id: int = 1) -> list:
     url = (
         f"{BASE}/schedule?sportId={sport_id}"
@@ -96,10 +79,34 @@ def fetch_live_feed(game_pk: int) -> dict:
     r.raise_for_status()
     return r.json()
 
+def prefetch_feed_background(game_pk: int):
+    """
+    Fire off fetch_live_feed in a background thread so the data is
+    warming in Streamlit's cache while the user reads the game selector.
+    The result is stored in session_state as a fallback if the cache
+    isn't ready yet, but usually the thread finishes before the user picks.
+    """
+    def _fetch():
+        try:
+            result = fetch_live_feed(game_pk)
+            st.session_state[f"prefetch_{game_pk}"] = result
+        except Exception:
+            pass
+
+    key = f"prefetch_started_{game_pk}"
+    if key not in st.session_state:
+        st.session_state[key] = True
+        t = threading.Thread(target=_fetch, daemon=True)
+        t.start()
+
 # ----------------------------
 # Data extraction
 # ----------------------------
 def extract_pitchers(feed: dict) -> dict:
+    """
+    Extract all pitchers and their pitches from a live game feed.
+    Returns dict: pitcher_id -> {name, team, pitches[], ip}
+    """
     away_abbr = feed.get("gameData", {}).get("teams", {}).get("away", {}).get("abbreviation", "?")
     home_abbr = feed.get("gameData", {}).get("teams", {}).get("home", {}).get("abbreviation", "?")
 
@@ -110,6 +117,7 @@ def extract_pitchers(feed: dict) -> dict:
     pitcher_map = {}
     all_plays = feed.get("liveData", {}).get("plays", {}).get("allPlays", [])
 
+    # First pass: collect pitches and track first/last play index per pitcher
     for i, play in enumerate(all_plays):
         pitcher = play.get("matchup", {}).get("pitcher")
         if not pitcher:
@@ -153,13 +161,11 @@ def extract_pitchers(feed: dict) -> dict:
             p_z        = coords.get("pZ")
             rel_x      = coords.get("x0")
             rel_z      = coords.get("z0")
-            spin_rate   = breaks.get("spinRate")
-            spin_axis   = breaks.get("spinDirection")
-            result      = ev.get("details", {}).get("description", "")
-            balls       = ev.get("count", {}).get("balls", "?")
-            strikes     = ev.get("count", {}).get("strikes", "?")
-            hit_data    = ev.get("hitData") or {}
-            exit_velo   = hit_data.get("launchSpeed")
+            spin_rate  = breaks.get("spinRate")
+            spin_axis  = breaks.get("spinDirection")
+            result     = ev.get("details", {}).get("description", "")
+            balls      = ev.get("count", {}).get("balls", "?")
+            strikes    = ev.get("count", {}).get("strikes", "?")
 
             pitcher_map[pid]["pitches"].append({
                 "pitch_type": pitch_type,
@@ -176,7 +182,6 @@ def extract_pitchers(feed: dict) -> dict:
                 "result":     result,
                 "balls":      balls,
                 "strikes":    strikes,
-                "exit_velo":  round(exit_velo, 1) if exit_velo is not None else None,
                 "batter":     batter,
                 "bat_side":   bat_side,
                 "inning":     inning,
@@ -184,6 +189,7 @@ def extract_pitchers(feed: dict) -> dict:
                 "outs":       outs,
                 "scoreline":  scoreline,
             })
+
 
     return pitcher_map
 
@@ -202,6 +208,7 @@ def game_status_label(game: dict) -> str:
         a_runs = game.get("linescore", {}).get("teams", {}).get("away", {}).get("runs", "")
         h_runs = game.get("linescore", {}).get("teams", {}).get("home", {}).get("runs", "")
         return f"Final  {a_runs}–{h_runs}"
+    # Pre-game: show start time in Eastern Time
     game_date = game.get("gameDate", "")
     if game_date:
         try:
@@ -218,6 +225,7 @@ def game_status_label(game: dict) -> str:
 # ----------------------------
 st.title("⚾ Live Games")
 
+# Sidebar controls
 st.sidebar.header("Game Settings")
 
 et_today = get_et_today()
@@ -229,19 +237,22 @@ selected_date = st.sidebar.date_input(
     min_value=et_today.replace(year=2008),
 )
 
-# League selector — MLB through Low-A (FSL)
-selected_league_label = st.sidebar.selectbox(
-    "League",
-    options=list(LEAGUE_OPTIONS.keys()),
-    index=0,
-)
-sport_id = LEAGUE_OPTIONS[selected_league_label]
+# Request all game types at once — no user selection needed
+game_type = "R,S,F,D,L,W"
 
-# Spring Training only makes sense for MLB
-game_type = "R,S,F,D,L,W" if sport_id == 1 else "R"
+league = st.sidebar.radio(
+    "League",
+    options=["MLB", "AAA"],
+    horizontal=True,
+)
+sport_id = 1 if league == "MLB" else 11
 
 if st.sidebar.button("↻ Refresh"):
     st.cache_data.clear()
+    # Clear prefetch state so background threads re-fire after refresh
+    for key in list(st.session_state.keys()):
+        if key.startswith("prefetch_"):
+            del st.session_state[key]
 
 # ----------------------------
 # Load games for selected date
@@ -257,16 +268,17 @@ except Exception as e:
     st.stop()
 
 date_label = selected_date.strftime("%A, %B %-d, %Y")
-st.caption(f"{'Today — ' if is_today else ''}{date_label} — {selected_league_label}")
+st.caption(f"{'Today — ' if is_today else ''}{date_label} — {league}")
 
 if not games:
-    st.info(f"No {selected_league_label} games found for {date_label}. Try a different date.")
+    st.info(f"No {league} games found for {date_label}. Try a different date.")
     st.stop()
 
 # ----------------------------
 # Game selector
 # ----------------------------
 def get_team_abbr(game, side):
+    """Extract team abbreviation with multiple fallback paths."""
     teams = game.get("teams", {})
     side_data = teams.get(side, {})
     abbr = side_data.get("team", {}).get("abbreviation")
@@ -306,8 +318,8 @@ def game_label(game):
 
 game_options = {game_label(g): g for g in games}
 
-# Default to preferred Reds affiliate for the selected level
-priority_keywords = PRIORITY_TEAMS.get(sport_id, ("CIN", "Cincinnati"))
+# Default to preferred team: Louisville Bats (AAA) or Reds (MLB)
+priority_keywords = ("LOU", "Louisville") if sport_id == 11 else ("CIN", "Cincinnati")
 default_idx = 0
 for i, (label, g) in enumerate(game_options.items()):
     away = get_team_abbr(g, "away")
@@ -319,6 +331,10 @@ for i, (label, g) in enumerate(game_options.items()):
         default_idx = i
         break
 
+# Pre-fetch the default game in the background while user reads the selector
+default_game = list(game_options.values())[default_idx]
+prefetch_feed_background(default_game["gamePk"])
+
 selected_game_label = st.selectbox(
     "Select Game",
     options=list(game_options.keys()),
@@ -326,6 +342,9 @@ selected_game_label = st.selectbox(
 )
 selected_game = game_options[selected_game_label]
 game_pk = selected_game["gamePk"]
+
+# Also pre-fetch the selected game if user changed the selection
+prefetch_feed_background(game_pk)
 
 # ----------------------------
 # Load game feed
@@ -345,6 +364,7 @@ away_abbr = get_team_abbr(selected_game, "away")
 home_abbr = get_team_abbr(selected_game, "home")
 is_live   = selected_game.get("status", {}).get("abstractGameState") == "Live"
 
+# Game header
 state_label = game_status_label(selected_game)
 st.subheader(f"{away.get('name','?')} @ {home.get('name','?')}")
 st.caption(f"{state_label}  ·  {selected_game.get('venue',{}).get('name','')}"
@@ -366,6 +386,7 @@ if not pitchers_with_pitches:
 # Team pitching summary tables
 # ----------------------------
 def player_link(name):
+    """Return an HTML anchor linking to the season stats page pre-filled with the player name."""
     from urllib.parse import quote
     encoded = quote(name)
     url = "/Pitch_Plots?player=" + encoded
@@ -388,7 +409,7 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_s
     strike_results = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
                       "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
 
-    headers = ["Pitcher", "IP", "H", "ER", "BB", "K", "HH", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
+    headers = ["Pitcher", "IP", "H", "ER", "BB", "K", "Pitches", "Avg Velo", "Max Velo", "Whiffs", "Strikes", "Balls", "InZone%", "Arsenal"]
     header_row = "".join(f"<th>{h}</th>" for h in headers)
 
     rows_html = ""
@@ -408,9 +429,6 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_s
                        and x.get("p_x") is not None and -0.83 <= x["p_x"] <= 0.83)
         in_zone_pct = fmt(round(in_zone / total * 100, 1), "%") if total else "—"
 
-        hard_hits = sum(1 for x in pitches
-                        if x.get("exit_velo") is not None and x["exit_velo"] >= 95)
-
         type_counts = {}
         for x in pitches:
             type_counts[x["pitch_type"]] = type_counts.get(x["pitch_type"], 0) + 1
@@ -419,6 +437,7 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_s
             for pt, cnt in sorted(type_counts.items(), key=lambda i: -i[1])[:5]
         )
 
+        # Boxscore stats from live feed
         bs = boxscore_stats.get(p["id"], {})
         ip = bs.get("inningsPitched", "—")
         h  = bs.get("hits",         "—")
@@ -428,7 +447,7 @@ def build_and_render_team_section(team_abbr, team_name, pitcher_list, boxscore_s
 
         cells = [
             player_link(p["name"]),
-            ip, h, er, bb, k, hard_hits,
+            ip, h, er, bb, k,
             total, avg_velo, max_velo, whiff_str, strikes, balls, in_zone_pct, arsenal
         ]
         rows_html += "<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
@@ -474,6 +493,7 @@ box = feed.get("liveData", {}).get("boxscore", {}).get("teams", {})
 away_pitcher_ids = box.get("away", {}).get("pitchers", [])
 home_pitcher_ids = box.get("home", {}).get("pitchers", [])
 
+# Build boxscore pitching stats lookup: player_id -> stats dict
 boxscore_stats = {}
 for side in ("away", "home"):
     players = box.get(side, {}).get("players", {})
@@ -511,6 +531,7 @@ pitches = selected_pitcher["pitches"]
 
 df = pd.DataFrame(pitches)
 
+# Pitch type filter
 pitch_types = sorted(df["pitch_type"].dropna().unique())
 selected_types = st.multiselect(
     "Filter by Pitch Type",
@@ -598,6 +619,7 @@ col_left, col_right = st.columns(2)
 with col_left:
     st.markdown("### Pitch Movement")
     if not plot_df.empty:
+        # Compute mean release position per pitch type for arm slot lines
         release_df = (
             plot_df.dropna(subset=["rel_x", "rel_z"])
             .groupby("pitch_type")[["rel_x", "rel_z"]]
@@ -607,6 +629,7 @@ with col_left:
 
         fig = go.Figure()
 
+        # Add scatter traces first
         for pt in plot_df["pitch_type"].unique():
             sub = plot_df[plot_df["pitch_type"] == pt]
             fig.add_trace(go.Scatter(
@@ -625,6 +648,7 @@ with col_left:
                 ),
             ))
 
+        # Add release point markers (mean position per pitch type)
         for _, row in release_df.iterrows():
             pt = row["pitch_type"]
             rx_in = row["rel_x"] * 12
@@ -632,7 +656,12 @@ with col_left:
             fig.add_trace(go.Scatter(
                 x=[rx_in], y=[rz_in],
                 mode="markers",
-                marker=dict(symbol="x", size=14, color="white", line=dict(width=2, color="white")),
+                marker=dict(
+                    symbol="x",
+                    size=14,
+                    color="white",
+                    line=dict(width=2, color="white"),
+                ),
                 name=pt + " Release",
                 showlegend=False,
                 hovertemplate=(
@@ -642,6 +671,7 @@ with col_left:
                 ),
             ))
 
+        # Reorder: release markers beneath scatter points
         n_pitches = plot_df["pitch_type"].nunique()
         reordered = list(fig.data[n_pitches:]) + list(fig.data[:n_pitches])
         fig.data = reordered
@@ -676,6 +706,7 @@ with col_right:
                     "Result: %{customdata[1]}<extra></extra>"
                 ),
             ))
+        # Strike zone
         fig2.add_shape(type="rect", x0=-0.83, x1=0.83, y0=1.5, y1=3.5,
                        line=dict(color="white", width=2))
         fig2.update_xaxes(title="Horizontal (ft)", range=[2, -2], constrain="domain")
@@ -714,6 +745,7 @@ if not df.empty and "velo" in df.columns:
             ),
         ))
 
+    # Add inning divider lines and labels
     if "inning" in seq_df.columns and "half" in seq_df.columns:
         seen = set()
         for _, row in seq_df.iterrows():
@@ -728,8 +760,12 @@ if not df.empty and "velo" in df.columns:
                     )
                 label = row["half"] + " " + str(row["inning"])
                 velo_fig.add_annotation(
-                    x=pnum, y=1.02, xref="x", yref="paper",
-                    text=label, showarrow=False,
+                    x=pnum,
+                    y=1.02,
+                    xref="x",
+                    yref="paper",
+                    text=label,
+                    showarrow=False,
                     font=dict(size=10, color="rgba(255,255,255,0.5)"),
                     xanchor="left",
                 )
@@ -737,7 +773,11 @@ if not df.empty and "velo" in df.columns:
     velo_fig.update_xaxes(title="Pitch #", showgrid=False)
     velo_fig.update_yaxes(title="Velocity (mph)", showgrid=True,
                           gridcolor="rgba(255,255,255,0.08)")
-    velo_fig.update_layout(height=350, legend=dict(orientation="h", y=-0.2), margin=dict(t=30))
+    velo_fig.update_layout(
+        height=350,
+        legend=dict(orientation="h", y=-0.2),
+        margin=dict(t=30),
+    )
     st.markdown("### Velocity by Pitch Sequence")
     st.plotly_chart(velo_fig, use_container_width=True)
 
@@ -771,15 +811,23 @@ if not spin_df.empty:
         ))
 
     spin_fig.update_xaxes(
-        title="Spin Axis (°)", range=[0, 360],
+        title="Spin Axis (°)",
+        range=[0, 360],
         tickvals=[0, 90, 180, 270, 360],
         ticktext=["0°", "90°", "180°", "270°", "360°"],
-        showgrid=True, gridcolor="rgba(255,255,255,0.08)",
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.08)",
     )
     spin_fig.update_yaxes(
-        title="Spin Rate (rpm)", showgrid=True, gridcolor="rgba(255,255,255,0.08)",
+        title="Spin Rate (rpm)",
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.08)",
     )
-    spin_fig.update_layout(height=400, legend=dict(orientation="h", y=-0.2), margin=dict(t=30))
+    spin_fig.update_layout(
+        height=400,
+        legend=dict(orientation="h", y=-0.2),
+        margin=dict(t=30),
+    )
     st.plotly_chart(spin_fig, use_container_width=True)
 
 # ----------------------------
@@ -787,7 +835,7 @@ if not spin_df.empty:
 # ----------------------------
 with st.expander("Pitch Log", expanded=False):
     log_cols = ["inning", "half", "batter", "bat_side", "pitch_type",
-                "pitch_name", "velo", "exit_velo", "pfx_x", "pfx_z", "balls", "strikes", "result"]
+                "pitch_name", "velo", "pfx_x", "pfx_z", "balls", "strikes", "result"]
     available_cols = [c for c in log_cols if c in df.columns]
     log_df = df[available_cols].copy()
     log_df.columns = [c.replace("_", " ").title() for c in log_df.columns]
