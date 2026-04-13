@@ -242,10 +242,10 @@ game_type = "R,S,F,D,L,W"
 
 league = st.sidebar.radio(
     "League",
-    options=["MLB", "AAA"],
+    options=["MLB", "AAA", "FSL"],
     horizontal=True,
 )
-sport_id = 1 if league == "MLB" else 11
+sport_id = {"MLB": 1, "AAA": 11, "FSL": 14}[league]
 
 if st.sidebar.button("↻ Refresh"):
     st.cache_data.clear()
@@ -318,8 +318,13 @@ def game_label(game):
 
 game_options = {game_label(g): g for g in games}
 
-# Default to preferred team: Louisville Bats (AAA) or Reds (MLB)
-priority_keywords = ("LOU", "Louisville") if sport_id == 11 else ("CIN", "Cincinnati")
+# Default to preferred team by league: Daytona (FSL), Louisville (AAA), Reds (MLB)
+if sport_id == 14:
+    priority_keywords = ("DAY", "Daytona")
+elif sport_id == 11:
+    priority_keywords = ("LOU", "Louisville")
+else:
+    priority_keywords = ("CIN", "Cincinnati")
 default_idx = 0
 for i, (label, g) in enumerate(game_options.items()):
     away = get_team_abbr(g, "away")
