@@ -3,7 +3,7 @@ import numpy as np
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-from pybaseball import statcast_pitcher, playerid_lookup, pitching_stats, schedule_and_record
+from pybaseball import statcast_pitcher, playerid_lookup, pitching_stats
 from pybaseball.playerid_lookup import get_lookup_table
 
 st.set_page_config(page_title="Pitch Analysis", page_icon="⚾", layout="wide")
@@ -50,11 +50,11 @@ pitch_name_mapping = {
 # ----------------------------
 # Cached Data Functions
 # ----------------------------
-@st.cache_data
+@st.cache_data(persist="disk")
 def get_filtered_data(start_date, end_date, playerid):
     return statcast_pitcher(start_dt=start_date, end_dt=end_date, player_id=playerid)
 
-@st.cache_data
+@st.cache_data(persist="disk")
 def get_season_stats(season):
     try:
         stats = pitching_stats(season, qual=0)
@@ -64,32 +64,35 @@ def get_season_stats(season):
     except Exception:
         return pd.DataFrame()
 
-@st.cache_data
-def get_season_dates(season, team_abbrev):
-    """
-    Fetch exact regular season start and end dates from the
-    player's team schedule via Baseball Reference.
-    """
-    schedule = schedule_and_record(season, team_abbrev)
-    schedule = schedule.copy()
-    schedule["Date"] = schedule["Date"].str.replace(r"\s*\(\d+\)$", "", regex=True)
-    schedule["Date"] = pd.to_datetime(
-        schedule["Date"].str.extract(r"(\w+,\s+\w+\s+\d+)")[0] + f" {season}",
-        format="%A, %b %d %Y",
-        errors="coerce"
-    )
-    schedule = schedule.dropna(subset=["Date"])
-    start = schedule["Date"].min().strftime("%Y-%m-%d")
-    end = schedule["Date"].max().strftime("%Y-%m-%d")
-    return start, end
-
-@st.cache_data
+@st.cache_data(persist="disk")
 def load_lookup_table():
     """
-    Load the full Chadwick player register once and cache it.
+    Load the full Chadwick player register once and cache it to disk.
     This powers all search queries locally without repeated API calls.
     """
     return get_lookup_table()
+
+@st.cache_data(persist="disk")
+def get_available_seasons(playerid):
+    """
+    Fetch all Statcast data in a single request and extract unique seasons.
+    Much faster than probing each year individually.
+    """
+    current_year = pd.Timestamp.now().year
+    try:
+        all_data = statcast_pitcher(
+            start_dt=f"2015-03-01",
+            end_dt=f"{current_year}-11-01",
+            player_id=playerid
+        )
+        if all_data is None or all_data.empty:
+            return []
+        return sorted(
+            all_data["game_year"].dropna().astype(int).unique().tolist(),
+            reverse=True
+        )
+    except Exception:
+        return []
 
 def get_arm_angle(data):
     """
@@ -198,23 +201,6 @@ selected_player_name = named_id_mapping[selected_norm]["display_name"]
 st.sidebar.markdown("---")
 st.sidebar.header("📅 Season")
 
-@st.cache_data
-def get_available_seasons(playerid):
-    current_year = pd.Timestamp.now().year
-    available = []
-    for yr in range(current_year, 2014, -1):
-        try:
-            sample = statcast_pitcher(
-                start_dt=f"{yr}-03-20",
-                end_dt=f"{yr}-11-01",
-                player_id=playerid
-            )
-            if sample is not None and not sample.empty:
-                available.append(yr)
-        except Exception:
-            continue
-    return available
-
 with st.sidebar:
     with st.spinner("Finding available seasons..."):
         available_years = get_available_seasons(playerid)
@@ -236,32 +222,10 @@ else:
     player_row = pd.DataFrame()
 
 # ----------------------------
-# Identify Team from Statcast Sample
+# Season date window (hardcoded — avoids an extra Baseball Reference scrape)
 # ----------------------------
-with st.spinner("Identifying team schedule..."):
-    try:
-        sample = get_filtered_data(
-            start_date=f"{season}-03-20",
-            end_date=f"{season}-09-30",
-            playerid=playerid
-        )
-        team_abbrev = sample["home_team"].mode()[0] if not sample.empty else None
-    except Exception:
-        team_abbrev = None
-
-# ----------------------------
-# Fetch Exact Season Dates
-# ----------------------------
-if team_abbrev:
-    try:
-        start_date, end_date = get_season_dates(season, team_abbrev)
-    except Exception:
-        start_date = f"{season}-03-20"
-        end_date = f"{season}-09-30"
-else:
-    start_date = f"{season}-03-20"
-    end_date = f"{season}-09-30"
-
+start_date = f"{season}-03-20"
+end_date   = f"{season}-10-05"
 st.caption(f"Regular season window: {start_date} → {end_date}")
 
 # ----------------------------
@@ -276,6 +240,14 @@ with st.spinner("Fetching Statcast data..."):
 
 if data.empty:
     st.warning("No data available for the selected player and season.")
+    st.stop()
+
+# Filter to the selected season only (the persisted cache may cover multiple years)
+if "game_year" in data.columns:
+    data = data[data["game_year"] == season]
+
+if data.empty:
+    st.warning(f"No data found for {season}.")
     st.stop()
 
 st.success(f"Data loaded for {season} regular season.")
