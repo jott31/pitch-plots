@@ -249,8 +249,25 @@ def aggregate_pitches(pitches):
         return pd.DataFrame(), {}
 
     df = pd.DataFrame(pitches)
+    # Ensure required columns exist with safe defaults
+    for col in ("pitch_type", "velo", "result", "p_x", "p_z"):
+        if col not in df.columns:
+            df[col] = None
+
+    # Drop rows with no pitch type
+    df = df[df["pitch_type"].notna() & (df["pitch_type"] != "")]
+    if df.empty:
+        return pd.DataFrame(), {}
+
     total = len(df)
     velos = df["velo"].dropna()
+
+    def in_zone_count(frame):
+        """Count pitches in strike zone, safely ignoring NaN coords."""
+        pz = pd.to_numeric(frame["p_z"], errors="coerce")
+        px = pd.to_numeric(frame["p_x"], errors="coerce")
+        mask = pz.between(1.5, 3.5) & px.between(-0.83, 0.83)
+        return int(mask.sum())
 
     overall = {
         "total":    total,
@@ -260,18 +277,19 @@ def aggregate_pitches(pitches):
         "swings":   int(df["result"].isin(SWING_R).sum()),
         "strikes":  int(df["result"].isin(STRIKE_R).sum()),
         "balls":    int(df["result"].apply(lambda r: (r or "").lower().startswith("ball")).sum()),
-        "in_zone":  int(df[df["p_z"].between(1.5, 3.5) & df["p_x"].between(-0.83, 0.83)].shape[0])
-                    if "p_z" in df and "p_x" in df else 0,
+        "in_zone":  in_zone_count(df),
     }
 
     rows = []
-    for pt in sorted(df["pitch_type"].unique()):
+    # sorted() with key avoids TypeError when mixing str/None
+    pitch_types = sorted(df["pitch_type"].dropna().unique(), key=lambda x: str(x))
+    for pt in pitch_types:
         sub  = df[df["pitch_type"] == pt]
         n    = len(sub)
         v    = sub["velo"].dropna()
         sw   = int(sub["result"].isin(SWING_R).sum())
         wh   = int(sub["result"].isin(WHIFF_R).sum())
-        iz   = int(sub[sub["p_z"].between(1.5, 3.5) & sub["p_x"].between(-0.83, 0.83)].shape[0])
+        iz   = in_zone_count(sub)
         rows.append({
             "pitch_type": pt,
             "Count":      n,
