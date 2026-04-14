@@ -426,6 +426,184 @@ def spin_fig(pitches, title="Spin Rate & Axis"):
     return fig
 
 # ──────────────────────────────────────────────
+# Game vs Season delta heatmap table
+# ──────────────────────────────────────────────
+# Stat polarity: True = higher is BETTER for pitcher (red), False = lower is BETTER (red)
+STAT_POLARITY = {
+    "Avg Velo":  True,   # harder = better
+    "Max Velo":  True,
+    "Whiff%":    True,   # more whiffs = better
+    "InZone%":   True,   # more zone strikes = better
+    "Usage%":    None,   # informational only, no colour
+    "Count":     None,
+}
+
+
+def _delta_color(delta, polarity, magnitude):
+    """
+    Return an rgba CSS string.
+    polarity True  -> positive delta = good for pitcher -> red
+    polarity False -> positive delta = bad  for pitcher -> blue
+    polarity None  -> neutral grey
+    Opacity scales 0.15-0.75 with magnitude.
+    """
+    if polarity is None or delta is None or magnitude == 0:
+        return "rgba(120,120,120,0.10)"
+    opacity = min(0.75, max(0.15, magnitude / 10.0 * 0.6 + 0.15))
+    is_good = (delta > 0 and polarity) or (delta < 0 and not polarity)
+    if is_good:
+        return f"rgba(220, 50, 50, {opacity:.2f})"
+    else:
+        return f"rgba(50, 100, 220, {opacity:.2f})"
+
+
+def render_game_vs_season_table(game_pitches, season_pitches):
+    """
+    Render a colour-coded HTML comparison table.
+    Rows = pitch types + ALL summary. Columns = metrics.
+    Game cells are coloured red (better) / blue (worse) vs season baseline.
+    Intensity scales with the magnitude of the difference.
+    """
+    _, ov_game    = aggregate_pitches(game_pitches)
+    _, ov_season  = aggregate_pitches(season_pitches)
+    bd_game,   _  = aggregate_pitches(game_pitches)
+    bd_season, _  = aggregate_pitches(season_pitches)
+
+    if bd_game.empty or bd_season.empty:
+        st.info("Not enough data to render comparison table.")
+        return
+
+    def fmt_val(val, key):
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return "—"
+        if key in ("Whiff%", "InZone%", "Usage%"):
+            return f"{val:.1f}%"
+        if key in ("Avg Velo", "Max Velo"):
+            return f"{val:.1f}"
+        return str(val)
+
+    wh_g = round(ov_game["whiffs"]   / ov_game["swings"]   * 100, 1) if ov_game.get("swings")   else None
+    wh_s = round(ov_season["whiffs"] / ov_season["swings"] * 100, 1) if ov_season.get("swings") else None
+    iz_g = round(ov_game["in_zone"]  / ov_game["total"]    * 100, 1) if ov_game.get("total")    else None
+    iz_s = round(ov_season["in_zone"] / ov_season["total"] * 100, 1) if ov_season.get("total")  else None
+
+    overall_game   = {"Avg Velo": ov_game.get("avg_velo"),   "Max Velo": ov_game.get("max_velo"),   "Whiff%": wh_g, "InZone%": iz_g}
+    overall_season = {"Avg Velo": ov_season.get("avg_velo"), "Max Velo": ov_season.get("max_velo"), "Whiff%": wh_s, "InZone%": iz_s}
+
+    merged = pd.merge(
+        bd_game.rename(columns=lambda c: c + "_g" if c != "pitch_type" else c),
+        bd_season.rename(columns=lambda c: c + "_s" if c != "pitch_type" else c),
+        on="pitch_type", how="outer",
+    ).fillna(0)
+
+    stat_cols = ["Avg Velo", "Max Velo", "Whiff%", "InZone%", "Usage%"]
+
+    st.markdown(
+        "<div style='font-size:12px;color:#aaa;margin-bottom:6px'>"
+        "<span style='color:rgba(220,50,50,0.75)'>■</span> Better than season avg &nbsp;&nbsp;"
+        "<span style='color:rgba(50,100,220,0.75)'>■</span> Worse than season avg &nbsp;&nbsp;"
+        "Intensity = size of difference"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    col_headers = (
+        ["Pitch", "Count<br><small>Game</small>", "Count<br><small>Season</small>"]
+        + [s + "<br><small>Game</small>"   for s in stat_cols]
+        + [s + "<br><small>Season</small>" for s in stat_cols]
+    )
+    header_html = "".join(f"<th>{h}</th>" for h in col_headers)
+
+    def build_row(pt_label, count_g, count_s, game_vals, season_vals, bold=False):
+        bopen  = "<b>" if bold else ""
+        bclose = "</b>" if bold else ""
+        cells  = [
+            f"<td>{bopen}{pt_label}{bclose}</td>",
+            f"<td style='text-align:right'>{bopen}{count_g}{bclose}</td>",
+            f"<td style='text-align:right;color:#aaa'>{bopen}{count_s}{bclose}</td>",
+        ]
+        for stat in stat_cols:
+            g_f = game_vals.get(stat)
+            s_f = season_vals.get(stat)
+            try:
+                g_f = float(g_f) if g_f is not None else None
+                s_f = float(s_f) if s_f is not None else None
+            except (TypeError, ValueError):
+                g_f = s_f = None
+            if g_f is not None and s_f is not None and s_f != 0:
+                delta = g_f - s_f
+                mag   = abs(delta)
+                color = _delta_color(delta, STAT_POLARITY.get(stat), mag)
+                delta_str = ("+" if delta > 0 else "") + f"{delta:.1f}"
+                tooltip = f"title='vs season: {delta_str}'"
+            else:
+                color = "rgba(120,120,120,0.10)"
+                tooltip = ""
+            display = fmt_val(g_f, stat)
+            cells.append(
+                f"<td style='background:{color};text-align:right' {tooltip}>"
+                f"{bopen}{display}{bclose}</td>"
+            )
+        for stat in stat_cols:
+            s_f = season_vals.get(stat)
+            try:
+                s_f = float(s_f) if s_f is not None else None
+            except (TypeError, ValueError):
+                s_f = None
+            display = fmt_val(s_f, stat)
+            cells.append(f"<td style='text-align:right;color:#aaa'>{bopen}{display}{bclose}</td>")
+        return "<tr>" + "".join(cells) + "</tr>"
+
+    rows_html = ""
+    for _, row in merged.iterrows():
+        pt      = row["pitch_type"]
+        count_g = int(row.get("Count_g", 0))
+        count_s = int(row.get("Count_s", 0))
+
+        def _rv(suffix):
+            return {s: (row.get(s + suffix) or None) for s in stat_cols}
+
+        rows_html += build_row(pt, count_g, count_s, _rv("_g"), _rv("_s"))
+
+    # ALL summary row
+    rows_html += (
+        "<tr style='border-top:2px solid #555'>"
+        + build_row(
+            "ALL",
+            ov_game.get("total", "—"),
+            ov_season.get("total", "—"),
+            overall_game,
+            overall_season,
+            bold=True,
+        )[4:-5]   # strip outer <tr>…</tr> since we already opened it
+        + "</tr>"
+    )
+
+    css = """
+    <style>
+      .delta-table {
+        width:100%; border-collapse:collapse; font-size:13px; margin-bottom:20px;
+      }
+      .delta-table th {
+        text-align:center; padding:5px 8px; border-bottom:2px solid #444;
+        font-family:monospace; font-size:11px; color:#aaa; text-transform:uppercase;
+        line-height:1.4;
+      }
+      .delta-table td { padding:5px 10px; border-bottom:1px solid #1e1e1e; }
+    </style>
+    """
+    table_html = (
+        css
+        + "<div style='overflow-x:auto'>"
+        + "<table class='delta-table'>"
+        + "<thead><tr>" + header_html + "</tr></thead>"
+        + "<tbody>" + rows_html + "</tbody>"
+        + "</table></div>"
+    )
+    st.markdown(table_html, unsafe_allow_html=True)
+
+
+# ──────────────────────────────────────────────
 # Render a full pitcher panel (one side)
 # ──────────────────────────────────────────────
 def render_panel(label, pitches, player_name, season, fg_row, source_tag):
@@ -849,6 +1027,11 @@ elif mode == "Game vs Season":
     away_name = sel_game.get("teams", {}).get("away", {}).get("team", {}).get("name", "Away")
     home_name = sel_game.get("teams", {}).get("home", {}).get("team", {}).get("name", "Home")
     st.subheader(f"{sel_pname}  ·  {away_name} @ {home_name}  vs  {season} Season")
+
+    # ── Delta heatmap table (always full-width, above side-by-side) ──
+    st.markdown("### 📊 Game vs Season — Pitch Comparison")
+    render_game_vs_season_table(game_pitches, season_pitches)
+    st.markdown("---")
 
     is_mobile = st.checkbox("📱 Mobile layout (tabs)", value=False)
 
