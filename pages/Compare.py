@@ -48,11 +48,28 @@ PITCH_NAMES = {
     "UN": "Unknown",
 }
 
-SWING_R  = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul", "Foul Tip",
-             "In play, out(s)", "In play, no out", "In play, runs"}
-WHIFF_R  = {"Swinging Strike", "Swinging Strike (Blocked)", "Foul Tip"}
-STRIKE_R = {"Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
-             "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs"}
+# Title Case  -> live feed (MLB Stats API)
+# snake_case  -> Statcast / pybaseball season data
+SWING_R  = {
+    "Swinging Strike", "Swinging Strike (Blocked)", "Foul", "Foul Tip",
+    "In play, out(s)", "In play, no out", "In play, runs",
+    "swinging_strike", "swinging_strike_blocked", "foul", "foul_tip",
+    "hit_into_play", "foul_bunt", "missed_bunt",
+}
+WHIFF_R  = {
+    "Swinging Strike", "Swinging Strike (Blocked)", "Foul Tip",
+    "swinging_strike", "swinging_strike_blocked", "foul_tip",
+}
+STRIKE_R = {
+    "Called Strike", "Swinging Strike", "Swinging Strike (Blocked)",
+    "Foul", "Foul Tip", "In play, out(s)", "In play, no out", "In play, runs",
+    "called_strike", "swinging_strike", "swinging_strike_blocked",
+    "foul", "foul_tip", "hit_into_play", "foul_bunt", "missed_bunt",
+}
+BALL_R = {
+    "ball", "blocked_ball", "pitchout",
+    "Ball", "Ball In Dirt",
+}
 
 def pname(code):
     return PITCH_NAMES.get(code, code or "?")
@@ -276,7 +293,7 @@ def aggregate_pitches(pitches):
         "whiffs":   int(df["result"].isin(WHIFF_R).sum()),
         "swings":   int(df["result"].isin(SWING_R).sum()),
         "strikes":  int(df["result"].isin(STRIKE_R).sum()),
-        "balls":    int(df["result"].apply(lambda r: (r or "").lower().startswith("ball")).sum()),
+        "balls":    int(df["result"].isin(BALL_R).sum()),
         "in_zone":  in_zone_count(df),
     }
 
