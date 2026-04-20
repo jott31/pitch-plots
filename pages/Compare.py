@@ -632,6 +632,77 @@ def render_comparison_table(pitches_left, pitches_right, label_left="Left", labe
 
 
 # ──────────────────────────────────────────────
+# Pitch usage by count helper
+# ──────────────────────────────────────────────
+def render_count_table(pitches, key_suffix=""):
+    """
+    Render a Pitch Usage by Count table for a list of pitch dicts.
+    Supports both Statcast-style (int balls/strikes) and live-feed style (may be '?').
+    """
+    if not pitches:
+        return
+
+    df = pd.DataFrame(pitches)
+    if "balls" not in df.columns or "strikes" not in df.columns:
+        return
+
+    df = df[
+        df["balls"].apply(lambda x: str(x).isdigit()) &
+        df["strikes"].apply(lambda x: str(x).isdigit())
+    ].copy()
+    if df.empty:
+        return
+
+    df["count"] = df["balls"].astype(str) + "-" + df["strikes"].astype(str)
+
+    ALL_COUNTS = ["0-0", "1-0", "2-0", "3-0", "0-1", "1-1", "2-1", "3-1", "0-2", "1-2", "2-2", "3-2"]
+    present_counts = [c for c in ALL_COUNTS if c in df["count"].values]
+    if not present_counts:
+        return
+
+    pivot   = df.groupby(["count", "pitch_type"]).size().reset_index(name="n")
+    totals  = df.groupby("count").size().reset_index(name="total")
+    pivot   = pivot.merge(totals, on="count")
+    pivot["pct"] = (pivot["n"] / pivot["total"] * 100).round(1)
+
+    pitch_order = (
+        df.groupby("pitch_type")
+        .size()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
+
+    rows = []
+    for cnt in present_counts:
+        sub     = pivot[pivot["count"] == cnt]
+        total_n = int(totals.loc[totals["count"] == cnt, "total"].values[0])
+        row     = {"Count": cnt, "Total": total_n}
+        for pt in pitch_order:
+            match  = sub[sub["pitch_type"] == pt]
+            row[pt] = match["pct"].values[0] if not match.empty else 0.0
+        rows.append(row)
+
+    count_table = pd.DataFrame(rows)
+
+    with st.expander("Pitch Usage by Count", expanded=False):
+        st.caption("% of pitches thrown in each count. Columns ordered by overall usage.")
+        col_cfg = {"Total": st.column_config.NumberColumn(label="Total Pitches")}
+        for pt in pitch_order:
+            col_cfg[pt] = st.column_config.NumberColumn(
+                label=pt,
+                format="%.1f%%",
+                help=pname(pt),
+            )
+        st.dataframe(
+            count_table,
+            column_config=col_cfg,
+            use_container_width=True,
+            hide_index=True,
+            key=f"count_table_{key_suffix}",
+        )
+
+
+# ──────────────────────────────────────────────
 # Render a full pitcher panel (one side)
 # ──────────────────────────────────────────────
 def render_panel(label, pitches, player_name, season, fg_row, source_tag):
@@ -682,6 +753,9 @@ def render_panel(label, pitches, player_name, season, fg_row, source_tag):
             use_container_width=True,
             hide_index=True,
         )
+
+    # ── Pitch usage by count
+    render_count_table(pitches, key_suffix=label.replace(" ", "_"))
 
     # ── Charts
     st.plotly_chart(movement_fig(pitches, f"Movement — {label}"),
