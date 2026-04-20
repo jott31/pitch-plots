@@ -614,6 +614,58 @@ if not df.empty:
     )
 
 # ----------------------------
+# Pitch Usage by Count (pitcher detail)
+# ----------------------------
+count_df_src = df[
+    df["balls"].apply(lambda x: str(x).isdigit()) &
+    df["strikes"].apply(lambda x: str(x).isdigit())
+].copy()
+count_df_src["count"] = count_df_src["balls"].astype(str) + "-" + count_df_src["strikes"].astype(str)
+
+ALL_COUNTS = ["0-0", "1-0", "2-0", "3-0", "0-1", "1-1", "2-1", "3-1", "0-2", "1-2", "2-2", "3-2"]
+present_counts = [c for c in ALL_COUNTS if c in count_df_src["count"].values]
+
+if not count_df_src.empty and present_counts:
+    _pivot = (
+        count_df_src.groupby(["count", "pitch_type"])
+        .size()
+        .reset_index(name="n")
+    )
+    _totals = count_df_src.groupby("count").size().reset_index(name="total")
+    _pivot  = _pivot.merge(_totals, on="count")
+    _pivot["pct"] = (_pivot["n"] / _pivot["total"] * 100).round(1)
+
+    _pitch_order = (
+        count_df_src.groupby("pitch_type")
+        .size()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
+
+    _table_rows = []
+    for cnt in present_counts:
+        sub = _pivot[_pivot["count"] == cnt]
+        total_n = int(_totals.loc[_totals["count"] == cnt, "total"].values[0])
+        row = {"Count": cnt, "Total": total_n}
+        for pt in _pitch_order:
+            match = sub[sub["pitch_type"] == pt]
+            row[pt] = match["pct"].values[0] if not match.empty else 0.0
+        _table_rows.append(row)
+
+    _count_table = pd.DataFrame(_table_rows)
+
+    with st.expander("Pitch Usage by Count", expanded=False):
+        st.caption("% of pitches thrown in each count. Columns ordered by overall pitch usage.")
+        _col_cfg = {"Total": st.column_config.NumberColumn(label="Total Pitches")}
+        for pt in _pitch_order:
+            _col_cfg[pt] = st.column_config.NumberColumn(
+                label=pt,
+                format="%.1f%%",
+                help=pitch_name(pt),
+            )
+        st.dataframe(_count_table, column_config=_col_cfg, use_container_width=True, hide_index=True)
+
+# ----------------------------
 # Movement & Location plots
 # ----------------------------
 plot_df = df.dropna(subset=["pfx_x", "pfx_z"])
