@@ -396,6 +396,58 @@ st.dataframe(
 )
 
 # ----------------------------
+# Pitch Usage by Count
+# ----------------------------
+count_data = filtered_data.dropna(subset=["balls", "strikes", "pitch_type"]).copy()
+count_data["balls"]   = count_data["balls"].astype(int)
+count_data["strikes"] = count_data["strikes"].astype(int)
+count_data["count"]   = count_data["balls"].astype(str) + "-" + count_data["strikes"].astype(str)
+
+ALL_COUNTS = ["0-0", "1-0", "2-0", "3-0", "0-1", "1-1", "2-1", "3-1", "0-2", "1-2", "2-2", "3-2"]
+present_counts = [c for c in ALL_COUNTS if c in count_data["count"].values]
+
+if not count_data.empty and present_counts:
+    count_pivot = (
+        count_data.groupby(["count", "pitch_type"])
+        .size()
+        .reset_index(name="n")
+    )
+    count_totals = count_data.groupby("count").size().reset_index(name="total")
+    count_pivot  = count_pivot.merge(count_totals, on="count")
+    count_pivot["pct"] = (count_pivot["n"] / count_pivot["total"] * 100).round(1)
+
+    pitch_order = (
+        count_data.groupby("pitch_type")
+        .size()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
+
+    table_rows = []
+    for cnt in present_counts:
+        sub = count_pivot[count_pivot["count"] == cnt]
+        total_pitches = count_totals.loc[count_totals["count"] == cnt, "total"].values
+        total_n = int(total_pitches[0]) if len(total_pitches) else 0
+        row = {"Count": cnt, "Total": total_n}
+        for pt in pitch_order:
+            match = sub[sub["pitch_type"] == pt]
+            row[pt] = match["pct"].values[0] if not match.empty else 0.0
+        table_rows.append(row)
+
+    count_df = pd.DataFrame(table_rows)
+
+    with st.expander("Pitch Usage by Count", expanded=False):
+        st.caption("% of pitches thrown in each count. Columns ordered by overall pitch usage.")
+        col_cfg = {"Total": st.column_config.NumberColumn(label="Total Pitches")}
+        for pt in pitch_order:
+            col_cfg[pt] = st.column_config.NumberColumn(
+                label=pt,
+                format="%.1f%%",
+                help=pitch_name_mapping.get(pt, pt),
+            )
+        st.dataframe(count_df, column_config=col_cfg, use_container_width=True, hide_index=True)
+
+# ----------------------------
 # Pitch Movement Plot
 # ----------------------------
 scatter_plot = go.Figure()
