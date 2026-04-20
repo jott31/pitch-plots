@@ -637,7 +637,7 @@ def render_comparison_table(pitches_left, pitches_right, label_left="Left", labe
 def render_count_table(pitches, key_suffix=""):
     """
     Render a Pitch Usage by Count table for a list of pitch dicts.
-    Supports both Statcast-style (int balls/strikes) and live-feed style (may be '?').
+    Cells are heat-mapped per column: red = higher usage, blue = lower usage.
     """
     if not pitches:
         return
@@ -684,21 +684,62 @@ def render_count_table(pitches, key_suffix=""):
 
     count_table = pd.DataFrame(rows)
 
-    with st.expander("Pitch Usage by Count", expanded=False):
-        st.caption("% of pitches thrown in each count. Columns ordered by overall usage.")
-        col_cfg = {"Total": st.column_config.NumberColumn(label="Total Pitches")}
+    # Per-column min/max for independent heat-mapping
+    col_ranges = {}
+    for pt in pitch_order:
+        col_vals = count_table[pt].values
+        col_ranges[pt] = (col_vals.min(), col_vals.max())
+
+    def _cell_color(val, col_min, col_max):
+        if col_max == col_min:
+            return "rgba(120,120,120,0.15)"
+        t = (val - col_min) / (col_max - col_min)
+        if t >= 0.5:
+            opacity = 0.15 + (t - 0.5) * 2 * 0.60
+            return f"rgba(210,50,50,{opacity:.2f})"
+        else:
+            opacity = 0.15 + (0.5 - t) * 2 * 0.60
+            return f"rgba(50,100,210,{opacity:.2f})"
+
+    header_cells = "<th>Count</th><th>Total</th>" + "".join(
+        f"<th title='{pname(pt)}'>{pt}</th>" for pt in pitch_order
+    )
+    rows_html = ""
+    for _, row in count_table.iterrows():
+        cells = (
+            f"<td style='font-weight:600'>{row['Count']}</td>"
+            f"<td style='color:#aaa'>{int(row['Total'])}</td>"
+        )
         for pt in pitch_order:
-            col_cfg[pt] = st.column_config.NumberColumn(
-                label=pt,
-                format="%.1f%%",
-                help=pname(pt),
-            )
-        st.dataframe(
-            count_table,
-            column_config=col_cfg,
-            use_container_width=True,
-            hide_index=True,
-            key=f"count_table_{key_suffix}",
+            val = row[pt]
+            col_min, col_max = col_ranges[pt]
+            bg = _cell_color(val, col_min, col_max)
+            cells += f"<td style='background:{bg};text-align:right'>{val:.1f}%</td>"
+        rows_html += f"<tr>{cells}</tr>"
+
+    css = """
+    <style>
+      .count-table {
+        width:100%; border-collapse:collapse; font-size:13px; margin-bottom:8px;
+      }
+      .count-table th {
+        text-align:center; padding:5px 10px; border-bottom:2px solid #444;
+        font-family:monospace; font-size:11px; color:#aaa; text-transform:uppercase;
+      }
+      .count-table td { padding:5px 10px; border-bottom:1px solid #1e1e1e; text-align:center; }
+    </style>
+    """
+
+    with st.expander("Pitch Usage by Count", expanded=False):
+        st.caption("% of pitches thrown in each count. Red = higher usage, blue = lower usage (per pitch type).")
+        st.markdown(
+            css
+            + "<table class='count-table'><thead><tr>"
+            + header_cells
+            + "</tr></thead><tbody>"
+            + rows_html
+            + "</tbody></table>",
+            unsafe_allow_html=True,
         )
 
 
