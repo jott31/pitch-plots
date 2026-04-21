@@ -793,11 +793,15 @@ def render_panel(label, pitches, player_name, season, fg_row, source_tag):
     if batter_hand != "Both":
         pitches = [p for p in pitches if str(p.get("bat_side", p.get("stand", ""))) == batter_hand]
 
+    if not pitches:
+        st.info(f"No pitches found vs {'RHH' if batter_hand == 'R' else 'LHH'}.")
+        return
+
     breakdown_df, overall = aggregate_pitches(pitches)
-    wh  = overall["whiffs"]
-    sw  = overall["swings"]
-    iz  = overall["in_zone"]
-    tot = overall["total"]
+    wh  = overall.get("whiffs", 0)
+    sw  = overall.get("swings", 0)
+    iz  = overall.get("in_zone", 0)
+    tot = overall.get("total",  0)
     q1, q2, q3, q4 = st.columns(4)
     q1.metric("Pitches",   tot)
     q2.metric("Avg Velo",  f"{overall['avg_velo']} mph" if overall["avg_velo"] else "—")
