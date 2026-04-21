@@ -264,17 +264,32 @@ data["pfx_z"] = data["pfx_z"] * 12
 arm_angle = get_arm_angle(data)
 
 # ----------------------------
-# Pitch Type Filter
+# Pitch Type Filter + Batter Handedness
 # ----------------------------
 pitch_types = sorted(data["pitch_type"].dropna().unique())
 
-selected_pitches = st.multiselect(
-    "Filter by Pitch Type",
-    options=pitch_types,
-    default=pitch_types
-)
+filter_col1, filter_col2 = st.columns([3, 1])
+
+with filter_col1:
+    selected_pitches = st.multiselect(
+        "Filter by Pitch Type",
+        options=pitch_types,
+        default=pitch_types
+    )
+
+with filter_col2:
+    batter_hand = st.radio(
+        "Batter",
+        options=["Both", "R", "L"],
+        horizontal=True,
+        label_visibility="visible",
+    )
 
 filtered_data = data[data["pitch_type"].isin(selected_pitches)].copy()
+
+# Apply batter handedness filter
+if batter_hand != "Both" and "stand" in filtered_data.columns:
+    filtered_data = filtered_data[filtered_data["stand"] == batter_hand]
 
 # Ensure optional columns exist — some seasons / venues omit these
 for _col in ["batter_name", "outs_when_up"]:
