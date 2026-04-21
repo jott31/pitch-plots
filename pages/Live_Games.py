@@ -572,6 +572,11 @@ df = df[df["pitch_type"].isin(selected_types)]
 if batter_hand != "Both":
     df = df[df["bat_side"] == batter_hand]
 
+if df.empty:
+    hand_label = "right-handed" if batter_hand == "R" else "left-handed"
+    st.info(f"No pitches found vs {hand_label} batters for the selected filters.")
+    st.stop()
+
 # ----------------------------
 # Metrics row
 # ----------------------------
