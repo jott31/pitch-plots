@@ -551,14 +551,26 @@ pitches = selected_pitcher["pitches"]
 
 df = pd.DataFrame(pitches)
 
-# Pitch type filter
+# Pitch type filter + batter handedness
 pitch_types = sorted(df["pitch_type"].dropna().unique())
-selected_types = st.multiselect(
-    "Filter by Pitch Type",
-    options=pitch_types,
-    default=pitch_types,
-)
+
+_lg_col1, _lg_col2 = st.columns([3, 1])
+with _lg_col1:
+    selected_types = st.multiselect(
+        "Filter by Pitch Type",
+        options=pitch_types,
+        default=pitch_types,
+    )
+with _lg_col2:
+    batter_hand = st.radio(
+        "Batter",
+        options=["Both", "R", "L"],
+        horizontal=True,
+    )
+
 df = df[df["pitch_type"].isin(selected_types)]
+if batter_hand != "Both":
+    df = df[df["bat_side"] == batter_hand]
 
 # ----------------------------
 # Metrics row
