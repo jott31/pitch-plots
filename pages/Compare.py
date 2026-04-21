@@ -260,6 +260,7 @@ def statcast_to_pitch_list(df):
             "balls":      r.get("balls", "?"),
             "strikes":    r.get("strikes", "?"),
             "batter":     r.get("batter_name", ""),
+            "bat_side":   r.get("stand", ""),
             "inning":     r.get("inning", "?"),
             "half":       "Top" if r.get("inning_topbot") == "Top" else "Bot",
         })
@@ -764,8 +765,6 @@ def render_count_table(pitches, key_suffix=""):
 def render_panel(label, pitches, player_name, season, fg_row, source_tag):
     """Render all comparison metrics + charts for one pitcher into the current column."""
 
-    breakdown_df, overall = aggregate_pitches(pitches)
-
     # ── FanGraphs season summary card
     st.markdown(f"#### 📋 {season} Season Stats")
     if fg_row is not None:
@@ -784,8 +783,17 @@ def render_panel(label, pitches, player_name, season, fg_row, source_tag):
         st.info("No pitch data available.")
         return
 
-    # ── Overall quick metrics
-    wh = overall["whiffs"]
+    # ── Batter handedness filter
+    batter_hand = st.radio(
+        "Batter",
+        options=["Both", "R", "L"],
+        horizontal=True,
+        key=f"batter_hand_{label.replace(' ', '_')}",
+    )
+    if batter_hand != "Both":
+        pitches = [p for p in pitches if str(p.get("bat_side", p.get("stand", ""))) == batter_hand]
+
+    breakdown_df, overall = aggregate_pitches(pitches)
     sw = overall["swings"]
     iz = overall["in_zone"]
     tot = overall["total"]
