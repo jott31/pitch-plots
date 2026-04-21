@@ -291,6 +291,11 @@ filtered_data = data[data["pitch_type"].isin(selected_pitches)].copy()
 if batter_hand != "Both" and "stand" in filtered_data.columns:
     filtered_data = filtered_data[filtered_data["stand"] == batter_hand]
 
+if filtered_data.empty:
+    hand_label = "right-handed" if batter_hand == "R" else "left-handed"
+    st.info(f"No pitches found vs {hand_label} batters for the selected filters.")
+    st.stop()
+
 # Ensure optional columns exist — some seasons / venues omit these
 for _col in ["batter_name", "outs_when_up"]:
     if _col not in filtered_data.columns:
