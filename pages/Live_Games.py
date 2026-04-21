@@ -144,6 +144,12 @@ def extract_pitchers(feed: dict) -> dict:
         home_sc   = play.get("result", {}).get("homeScore", "?")
         scoreline = f"{away_abbr} {away_sc} - {home_sc} {home_abbr}"
 
+        # Track the pre-pitch count by walking events in order.
+        # ev["count"] is the count AFTER the pitch, so we maintain
+        # our own running tally and record it before each pitch.
+        pa_balls   = 0
+        pa_strikes = 0
+
         for ev in play.get("playEvents", []):
             if not ev.get("isPitch"):
                 continue
@@ -164,8 +170,17 @@ def extract_pitchers(feed: dict) -> dict:
             spin_rate  = breaks.get("spinRate")
             spin_axis  = breaks.get("spinDirection")
             result     = ev.get("details", {}).get("description", "")
-            balls      = ev.get("count", {}).get("balls", "?")
-            strikes    = ev.get("count", {}).get("strikes", "?")
+
+            # Record the pre-pitch count (before this pitch's outcome)
+            balls   = pa_balls
+            strikes = pa_strikes
+
+            # Advance running count using the post-pitch values from the API
+            after_balls   = ev.get("count", {}).get("balls")
+            after_strikes = ev.get("count", {}).get("strikes")
+            if after_balls is not None and after_strikes is not None:
+                pa_balls   = after_balls
+                pa_strikes = after_strikes
 
             pitcher_map[pid]["pitches"].append({
                 "pitch_type": pitch_type,
