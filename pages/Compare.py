@@ -794,8 +794,9 @@ def render_panel(label, pitches, player_name, season, fg_row, source_tag):
         pitches = [p for p in pitches if str(p.get("bat_side", p.get("stand", ""))) == batter_hand]
 
     breakdown_df, overall = aggregate_pitches(pitches)
-    sw = overall["swings"]
-    iz = overall["in_zone"]
+    wh  = overall["whiffs"]
+    sw  = overall["swings"]
+    iz  = overall["in_zone"]
     tot = overall["total"]
     q1, q2, q3, q4 = st.columns(4)
     q1.metric("Pitches",   tot)
