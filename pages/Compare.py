@@ -190,6 +190,11 @@ def extract_pitcher_pitches(feed, target_pid=None):
         inning   = play.get("about", {}).get("inning", 1)
         half_str = "Top" if play.get("about", {}).get("halfInning") == "top" else "Bot"
 
+        # Track pre-pitch count: ev["count"] is AFTER the pitch, so maintain
+        # our own running tally and record it before advancing.
+        pa_balls   = 0
+        pa_strikes = 0
+
         for ev in play.get("playEvents", []):
             if not ev.get("isPitch"):
                 continue
@@ -202,6 +207,16 @@ def extract_pitcher_pitches(feed, target_pid=None):
             rv     = breaks.get("breakVerticalInduced") or breaks.get("breakVertical")
             pfx_x  = (-rh) if rh is not None else None
             pfx_z  = rv    if rv is not None else None
+
+            # Record pre-pitch count, then advance
+            balls   = pa_balls
+            strikes = pa_strikes
+            after_b = ev.get("count", {}).get("balls")
+            after_s = ev.get("count", {}).get("strikes")
+            if after_b is not None and after_s is not None:
+                pa_balls   = after_b
+                pa_strikes = after_s
+
             pitcher_map[pid]["pitches"].append({
                 "pitch_type": code,
                 "velo":       round(velo, 1)  if velo  is not None else None,
@@ -212,8 +227,8 @@ def extract_pitcher_pitches(feed, target_pid=None):
                 "spin_rate":  round(breaks.get("spinRate")) if breaks.get("spinRate") else None,
                 "spin_axis":  round(breaks.get("spinDirection")) if breaks.get("spinDirection") else None,
                 "result":     ev.get("details", {}).get("description", ""),
-                "balls":      ev.get("count", {}).get("balls", "?"),
-                "strikes":    ev.get("count", {}).get("strikes", "?"),
+                "balls":      balls,
+                "strikes":    strikes,
                 "batter":     batter,
                 "inning":     inning,
                 "half":       half_str,
