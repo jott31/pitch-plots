@@ -187,6 +187,7 @@ def extract_pitcher_pitches(feed, target_pid=None):
             pitcher_map[pid] = {"name": pname_str, "team": team, "pitches": []}
 
         batter   = play.get("matchup", {}).get("batter", {}).get("fullName", "")
+        bat_side = play.get("matchup", {}).get("batSide", {}).get("code", "")
         inning   = play.get("about", {}).get("inning", 1)
         half_str = "Top" if play.get("about", {}).get("halfInning") == "top" else "Bot"
 
@@ -230,6 +231,7 @@ def extract_pitcher_pitches(feed, target_pid=None):
                 "balls":      balls,
                 "strikes":    strikes,
                 "batter":     batter,
+                "bat_side":   bat_side,
                 "inning":     inning,
                 "half":       half_str,
             })
