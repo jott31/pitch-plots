@@ -240,12 +240,29 @@ def game_status_label(game: dict) -> str:
 # ----------------------------
 st.title("⚾ Live Games")
 
-# Hide sidebar entirely
+# Hide sidebar, show inline nav
 st.markdown("""
     <style>
-        [data-testid="stSidebar"] { display: none; }
+        [data-testid="stSidebar"]       { display: none; }
         [data-testid="collapsedControl"] { display: none; }
+        .nav-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .nav-bar a {
+            padding: 6px 18px; border-radius: 20px; text-decoration: none;
+            font-size: 14px; font-weight: 500;
+            background: rgba(255,255,255,0.07);
+            color: #ccc; border: 1px solid rgba(255,255,255,0.12);
+        }
+        .nav-bar a:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .nav-bar a.active {
+            background: #c8f135; color: #111;
+            border-color: #c8f135; font-weight: 700;
+        }
     </style>
+    <div class="nav-bar">
+        <a href="/Season_Data" target="_self">⚾ Season Stats</a>
+        <a href="/Live_Games"  target="_self" class="active">🔴 Live Games</a>
+        <a href="/Compare"     target="_self">📊 Compare</a>
+    </div>
 """, unsafe_allow_html=True)
 
 et_today = get_et_today()
