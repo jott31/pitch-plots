@@ -905,32 +905,31 @@ def pitcher_options_from_feed(feed):
     return opts
 
 # ──────────────────────────────────────────────
-# Sidebar: player search widget (A or B)
+# Player search widget (A or B) — inline
 # ──────────────────────────────────────────────
-def sidebar_player_search(slot_key, label, named_id, norm_to_pretty):
+def player_search(slot_key, label, named_id, norm_to_pretty):
     """
-    Renders search + selectbox in sidebar for one player slot.
+    Renders search + selectbox inline for one player slot.
     Returns (playerid, player_name) or (None, None).
     """
-    st.sidebar.markdown(f"### {label}")
-    q = st.sidebar.text_input(
+    st.markdown(f"**{label}**")
+    q = st.text_input(
         f"Search {label}",
         key=f"search_{slot_key}",
         placeholder="e.g. Greene, Lodolo",
         label_visibility="collapsed",
     )
     if not q or len(q.strip()) < 2:
-        st.sidebar.caption("Type ≥ 2 characters")
+        st.caption("Type ≥ 2 characters")
         return None, None
 
     norm_q   = strip_accents(q.strip()).lower()
     matches  = sorted([n for n in named_id if norm_q in n.lower()])
     if not matches:
-        st.sidebar.error("No players found")
+        st.error("No players found")
         return None, None
 
-    st.sidebar.caption(f"{len(matches)} result(s)")
-    selected = st.sidebar.selectbox(
+    selected = st.selectbox(
         f"Select {label}",
         options=matches,
         format_func=lambda n: norm_to_pretty[n],
@@ -955,15 +954,25 @@ with st.spinner("Loading player database…"):
 
 named_id, norm_to_pretty = build_player_index(lookup_table)
 
+# Hide sidebar entirely
+st.markdown("""
+    <style>
+        [data-testid="stSidebar"] { display: none; }
+        [data-testid="collapsedControl"] { display: none; }
+    </style>
+""", unsafe_allow_html=True)
+
 # ──────────────────────────────────────────────
-# Sidebar: comparison mode
+# Comparison mode — inline
 # ──────────────────────────────────────────────
-st.sidebar.header("🔀 Comparison Mode")
-mode = st.sidebar.radio(
+mode = st.radio(
     "Mode",
     ["Player vs Player", "Season vs Season", "Game vs Season"],
+    horizontal=True,
     label_visibility="collapsed",
 )
+
+st.markdown("---")
 
 et_today = get_et_today()
 
@@ -971,17 +980,18 @@ et_today = get_et_today()
 # MODE 1 — Player vs Player
 # ══════════════════════════════════════════════
 if mode == "Player vs Player":
-    st.sidebar.markdown("---")
-    pid_a, name_a = sidebar_player_search("a", "🔵 Player A", named_id, norm_to_pretty)
-    st.sidebar.markdown("---")
-    pid_b, name_b = sidebar_player_search("b", "🔴 Player B", named_id, norm_to_pretty)
-
-    st.sidebar.markdown("---")
-    season = st.sidebar.number_input("Season", min_value=2015, max_value=et_today.year,
-                                     value=et_today.year, step=1)
+    _pvp_c1, _pvp_c2, _pvp_c3 = st.columns([2, 2, 1])
+    with _pvp_c1:
+        pid_a, name_a = player_search("a", "🔵 Player A", named_id, norm_to_pretty)
+    with _pvp_c2:
+        pid_b, name_b = player_search("b", "🔴 Player B", named_id, norm_to_pretty)
+    with _pvp_c3:
+        season = st.number_input("Season", min_value=2015, max_value=et_today.year,
+                                 value=et_today.year, step=1)
+    st.markdown("---")
 
     if not pid_a and not pid_b:
-        st.info("👈 Search for two pitchers in the sidebar to start comparing.")
+        st.info("Search for two pitchers above to start comparing.")
         st.stop()
 
     # Fetch data for both players
@@ -1046,17 +1056,19 @@ if mode == "Player vs Player":
 # MODE 2 — Season vs Season (same pitcher)
 # ══════════════════════════════════════════════
 elif mode == "Season vs Season":
-    st.sidebar.markdown("---")
-    pid, player_name = sidebar_player_search("svs", "🔍 Pitcher", named_id, norm_to_pretty)
-
-    st.sidebar.markdown("---")
-    season_a = st.sidebar.number_input("Season A (left)",  min_value=2015,
-                                       max_value=et_today.year, value=max(2015, et_today.year - 1), step=1)
-    season_b = st.sidebar.number_input("Season B (right)", min_value=2015,
-                                       max_value=et_today.year, value=et_today.year, step=1)
+    _svs_c1, _svs_c2, _svs_c3 = st.columns([3, 1, 1])
+    with _svs_c1:
+        pid, player_name = player_search("svs", "🔍 Pitcher", named_id, norm_to_pretty)
+    with _svs_c2:
+        season_a = st.number_input("Season A (left)",  min_value=2015,
+                                   max_value=et_today.year, value=max(2015, et_today.year - 1), step=1)
+    with _svs_c3:
+        season_b = st.number_input("Season B (right)", min_value=2015,
+                                   max_value=et_today.year, value=et_today.year, step=1)
+    st.markdown("---")
 
     if not pid:
-        st.info("👈 Search for a pitcher in the sidebar.")
+        st.info("Search for a pitcher above.")
         st.stop()
 
     with st.spinner(f"Loading {player_name} — {season_a}…"):
@@ -1104,12 +1116,14 @@ elif mode == "Season vs Season":
 # MODE 3 — Game vs Season
 # ══════════════════════════════════════════════
 elif mode == "Game vs Season":
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("#### 🎮 Game Settings")
-    sport_id = 1 if st.sidebar.radio("League", ["MLB", "AAA"], horizontal=True) == "MLB" else 11
-    game_date = st.sidebar.date_input("Game Date", value=et_today,
-                                      max_value=et_today,
-                                      min_value=date(2008, 1, 1))
+    _gvs_c1, _gvs_c2, _gvs_c3 = st.columns([2, 2, 1])
+    with _gvs_c1:
+        game_date = st.date_input("Game Date", value=et_today,
+                                  max_value=et_today,
+                                  min_value=date(2008, 1, 1))
+    with _gvs_c2:
+        sport_id = 1 if st.radio("League", ["MLB", "AAA"], horizontal=True) == "MLB" else 11
+    st.markdown("---")
 
     date_str = game_date.strftime("%Y-%m-%d")
 
@@ -1136,7 +1150,9 @@ elif mode == "Game vs Season":
             def_idx = i
             break
 
-    sel_game_lbl = st.sidebar.selectbox("Select Game", list(game_opts.keys()), index=def_idx)
+    _gvs2_c1, _gvs2_c2 = st.columns(2)
+    with _gvs2_c1:
+        sel_game_lbl = st.selectbox("Select Game", list(game_opts.keys()), index=def_idx)
     sel_game     = game_opts[sel_game_lbl]
     game_pk      = sel_game["gamePk"]
 
@@ -1152,12 +1168,12 @@ elif mode == "Game vs Season":
         st.info("No pitch data found for this game yet.")
         st.stop()
 
-    sel_p_lbl = st.sidebar.selectbox("Select Pitcher from Game", list(pitcher_opts.keys()))
+    with _gvs2_c2:
+        sel_p_lbl = st.selectbox("Select Pitcher from Game", list(pitcher_opts.keys()))
     sel_pid, sel_pname = pitcher_opts[sel_p_lbl]
 
     season = game_date.year
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"**Season:** {season} (auto)")
+    st.caption(f"Season: {season} (auto)")
 
     # Load game pitches
     game_pitches = extract_pitcher_pitches(feed, target_pid=sel_pid)
