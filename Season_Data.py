@@ -119,11 +119,17 @@ st.title("Pitch Movement & Season Dashboard")
 with st.spinner("Loading player database..."):
     lookup_table = load_lookup_table()
 
-# ----------------------------
-# FIND PITCHER — Accent-folding search
-# ----------------------------
-st.sidebar.header("🔍 Find Pitcher")
+# Hide sidebar entirely
+st.markdown("""
+    <style>
+        [data-testid="stSidebar"] { display: none; }
+        [data-testid="collapsedControl"] { display: none; }
+    </style>
+""", unsafe_allow_html=True)
 
+# ----------------------------
+# FIND PITCHER — inline top controls
+# ----------------------------
 import unicodedata
 
 def strip_accents(text):
@@ -131,7 +137,7 @@ def strip_accents(text):
 
 # Build lookup: norm_label -> player info + pretty display label
 named_id_mapping = {}
-norm_to_pretty = {}   # norm_label -> pretty display label
+norm_to_pretty = {}
 
 valid_players = lookup_table[
     lookup_table["key_mlbam"].notna() & (lookup_table["key_mlbam"] != "")
@@ -155,41 +161,37 @@ for _, row in valid_players.iterrows():
 
 _param_player = st.query_params.get("player", "")
 
-search_query = st.sidebar.text_input(
-    "Search pitcher",
-    value=_param_player,
-    placeholder="Type a name… e.g. Pena, Valdez",
-    label_visibility="collapsed",
-)
-st.sidebar.caption("🔍 Search by name — accents optional")
+ctrl_c1, ctrl_c2, ctrl_c3 = st.columns([2, 2, 1])
+
+with ctrl_c1:
+    search_query = st.text_input(
+        "🔍 Search pitcher",
+        value=_param_player,
+        placeholder="e.g. Greene, Lodolo",
+    )
 
 if not search_query or len(search_query.strip()) < 2:
-    st.sidebar.info("Type at least 2 characters.")
-    st.info("👈 Use the sidebar to search for a pitcher.")
+    st.info("Search for a pitcher above to get started.")
     st.stop()
 
 query_norm = strip_accents(search_query.strip()).lower()
-matched_norms = [n for n in named_id_mapping if query_norm in n.lower()]
+matched_norms = sorted([n for n in named_id_mapping if query_norm in n.lower()])
 
 if not matched_norms:
-    st.sidebar.error("No players found. Try a different spelling.")
+    st.error("No players found. Try a different spelling.")
     st.stop()
 
-matched_norms.sort()
-st.sidebar.caption(f"{len(matched_norms)} result(s)")
-
-selected_norm = st.sidebar.selectbox(
-    "Select pitcher",
-    options=matched_norms,
-    format_func=lambda n: norm_to_pretty[n],
-    index=0,
-    label_visibility="collapsed",
-)
+with ctrl_c2:
+    selected_norm = st.selectbox(
+        "Select pitcher",
+        options=matched_norms,
+        format_func=lambda n: norm_to_pretty[n],
+        index=0,
+        label_visibility="visible",
+    )
 
 if selected_norm is None:
     st.stop()
-
-selected_label = norm_to_pretty[selected_norm]
 
 playerid = named_id_mapping[selected_norm]["mlbam"]
 fangraphs_id = named_id_mapping[selected_norm]["fangraphs"]
@@ -198,18 +200,17 @@ selected_player_name = named_id_mapping[selected_norm]["display_name"]
 # ----------------------------
 # Season / Year Selection
 # ----------------------------
-st.sidebar.markdown("---")
-st.sidebar.header("📅 Season")
-
-with st.sidebar:
-    with st.spinner("Finding available seasons..."):
-        available_years = get_available_seasons(playerid)
+with st.spinner("Finding available seasons..."):
+    available_years = get_available_seasons(playerid)
 
 if not available_years:
-    st.sidebar.error("No Statcast data found for this pitcher.")
+    st.error("No Statcast data found for this pitcher.")
     st.stop()
 
-season = st.sidebar.selectbox("Select Season", options=available_years, index=0)
+with ctrl_c3:
+    season = st.selectbox("Season", options=available_years, index=0)
+
+st.markdown("---")
 
 # ----------------------------
 # Fetch Season Stats
