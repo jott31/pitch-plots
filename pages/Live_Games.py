@@ -240,34 +240,46 @@ def game_status_label(game: dict) -> str:
 # ----------------------------
 st.title("⚾ Live Games")
 
-# Sidebar controls
-st.sidebar.header("Game Settings")
+# Hide sidebar entirely
+st.markdown("""
+    <style>
+        [data-testid="stSidebar"] { display: none; }
+        [data-testid="collapsedControl"] { display: none; }
+    </style>
+""", unsafe_allow_html=True)
 
 et_today = get_et_today()
 
-selected_date = st.sidebar.date_input(
-    "Date",
-    value=et_today,
-    max_value=et_today,
-    min_value=et_today.replace(year=2008),
-)
+_lv_c1, _lv_c2, _lv_c3, _lv_c4 = st.columns([2, 2, 1, 1])
+
+with _lv_c1:
+    selected_date = st.date_input(
+        "Date",
+        value=et_today,
+        max_value=et_today,
+        min_value=et_today.replace(year=2008),
+    )
+
+with _lv_c2:
+    league = st.radio(
+        "League",
+        options=["MLB", "AAA", "FSL"],
+        horizontal=True,
+    )
+
+sport_id = {"MLB": 1, "AAA": 11, "FSL": 14}[league]
+
+with _lv_c3:
+    st.write("")  # vertical spacer to align button
+    st.write("")
+    if st.button("↻ Refresh"):
+        st.cache_data.clear()
+        for key in list(st.session_state.keys()):
+            if key.startswith("prefetch_"):
+                del st.session_state[key]
 
 # Request all game types at once — no user selection needed
 game_type = "R,S,F,D,L,W"
-
-league = st.sidebar.radio(
-    "League",
-    options=["MLB", "AAA", "FSL"],
-    horizontal=True,
-)
-sport_id = {"MLB": 1, "AAA": 11, "FSL": 14}[league]
-
-if st.sidebar.button("↻ Refresh"):
-    st.cache_data.clear()
-    # Clear prefetch state so background threads re-fire after refresh
-    for key in list(st.session_state.keys()):
-        if key.startswith("prefetch_"):
-            del st.session_state[key]
 
 # ----------------------------
 # Load games for selected date
