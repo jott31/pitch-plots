@@ -243,7 +243,8 @@ st.title("⚾ Live Games")
 # Hide sidebar, show inline nav
 st.markdown("""
     <style>
-        [data-testid="stSidebar"]       { display: none; }
+        html, body, [data-testid="stApp"] { background-color: #0e1117 !important; }
+        [data-testid="stSidebar"]        { display: none; }
         [data-testid="collapsedControl"] { display: none; }
         .nav-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
         .nav-bar a {
@@ -259,9 +260,9 @@ st.markdown("""
         }
     </style>
     <div class="nav-bar">
-        <a href="/Season_Data" target="_self">⚾ Season Stats</a>
+        <a href="/Season_Data" target="_self" >⚾ Season Stats</a>
         <a href="/Live_Games"  target="_self" class="active">🔴 Live Games</a>
-        <a href="/Compare"     target="_self">📊 Compare</a>
+        <a href="/Compare"     target="_self" >📊 Compare</a>
     </div>
 """, unsafe_allow_html=True)
 
