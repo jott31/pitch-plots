@@ -14,7 +14,7 @@ st.markdown("""
 
 pg = st.navigation(
     [
-        st.Page("pages/Season_Data.py", title="Season Stats",  icon="⚾", default=True),
+        st.Page("pages/Season_Stats.py", title="Season Stats",  icon="⚾", default=True),
         st.Page("pages/Live_Games.py",  title="Live Games",    icon="🔴"),
         st.Page("pages/Compare.py",     title="Compare",       icon="📊"),
     ],
