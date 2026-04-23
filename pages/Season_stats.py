@@ -134,7 +134,7 @@ st.markdown("""
         }
     </style>
     <div class="nav-bar">
-        <a href="/Season_Data" target="_self" class="active">⚾ Season Stats</a>
+        <a href="/Season_Stats" target="_self" class="active">⚾ Season Stats</a>
         <a href="/Live_Games"  target="_self" >🔴 Live Games</a>
         <a href="/Compare"     target="_self" >📊 Compare</a>
     </div>
