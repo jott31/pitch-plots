@@ -238,28 +238,40 @@ def game_status_label(game: dict) -> str:
 # ----------------------------
 st.title("⚾ Live Games")
 
-# Inline nav bar
+# Inline nav bar — uses st.page_link for soft navigation (no page reload)
 st.markdown("""
     <style>
-        .nav-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-        .nav-bar a {
-            padding: 6px 18px; border-radius: 20px; text-decoration: none;
-            font-size: 14px; font-weight: 500;
-            background: rgba(255,255,255,0.07);
-            color: #ccc; border: 1px solid rgba(255,255,255,0.12);
+        div[data-testid="stPageLink"] a {
+            padding: 6px 18px !important;
+            border-radius: 20px !important;
+            text-decoration: none !important;
+            font-size: 14px !important;
+            font-weight: 500 !important;
+            background: rgba(255,255,255,0.07) !important;
+            color: #ccc !important;
+            border: 1px solid rgba(255,255,255,0.12) !important;
+            display: inline-block !important;
         }
-        .nav-bar a:hover { background: rgba(255,255,255,0.15); color: #fff; }
-        .nav-bar a.active {
-            background: #c8f135; color: #111;
-            border-color: #c8f135; font-weight: 700;
+        div[data-testid="stPageLink"] a:hover {
+            background: rgba(255,255,255,0.15) !important;
+            color: #fff !important;
         }
+        div[data-testid="stPageLink-active"] a {
+            background: #c8f135 !important;
+            color: #111 !important;
+            border-color: #c8f135 !important;
+            font-weight: 700 !important;
+        }
+        div[data-testid="stHorizontalBlock"] { gap: 8px; align-items: center; }
     </style>
-    <div class="nav-bar">
-        <a href="/Season_Stats" target="_self" >⚾ Season Stats</a>
-        <a href="/Live_Games"  target="_self" class="active">🔴 Live Games</a>
-        <a href="/Compare"     target="_self" >📊 Compare</a>
-    </div>
 """, unsafe_allow_html=True)
+_nav_cols = st.columns([1, 1, 1, 6])
+with _nav_cols[0]:
+    st.page_link("pages/Season_Stats.py", label="⚾ Season Stats")
+with _nav_cols[1]:
+    st.page_link("pages/Live_Games.py",  label="🔴 Live Games")
+with _nav_cols[2]:
+    st.page_link("pages/Compare.py",     label="📊 Compare")
 
 et_today = get_et_today()
 
