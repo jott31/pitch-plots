@@ -8,8 +8,6 @@ import plotly.graph_objects as go
 from pybaseball import statcast_pitcher, pitching_stats
 from pybaseball.playerid_lookup import get_lookup_table
 
-st.set_page_config(page_title="Pitcher Comparison", page_icon="⚾", layout="wide")
-
 # ──────────────────────────────────────────────
 # Constants
 # ──────────────────────────────────────────────
@@ -954,12 +952,9 @@ with st.spinner("Loading player database…"):
 
 named_id, norm_to_pretty = build_player_index(lookup_table)
 
-# Hide sidebar, show inline nav
+# Inline nav bar
 st.markdown("""
     <style>
-        html, body, [data-testid="stApp"] { background-color: #0e1117 !important; }
-        [data-testid="stSidebar"]        { display: none; }
-        [data-testid="collapsedControl"] { display: none; }
         .nav-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
         .nav-bar a {
             padding: 6px 18px; border-radius: 20px; text-decoration: none;
