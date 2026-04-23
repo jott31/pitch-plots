@@ -6,8 +6,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 
-st.set_page_config(page_title="Live Games", page_icon="⚾", layout="wide")
-
 # ----------------------------
 # Constants
 # ----------------------------
@@ -240,12 +238,9 @@ def game_status_label(game: dict) -> str:
 # ----------------------------
 st.title("⚾ Live Games")
 
-# Hide sidebar, show inline nav
+# Inline nav bar
 st.markdown("""
     <style>
-        html, body, [data-testid="stApp"] { background-color: #0e1117 !important; }
-        [data-testid="stSidebar"]        { display: none; }
-        [data-testid="collapsedControl"] { display: none; }
         .nav-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
         .nav-bar a {
             padding: 6px 18px; border-radius: 20px; text-decoration: none;
